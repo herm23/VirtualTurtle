@@ -1,0 +1,5 @@
+uint32[] ids            # empty = all tags
+string target_frame     # in which frame to return them
+---
+TagDetection[] tags     # detected tags
+bool success            # outcome
