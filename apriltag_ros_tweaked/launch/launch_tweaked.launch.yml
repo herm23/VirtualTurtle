@@ -32,7 +32,7 @@ launch:
     - pkg: apriltag_ros_tweaked
       plugin: AprilTagNode
       name: apriltag
-      namespace: apriltag
+      namespace: ""
       remap:
       - from: image_rect
         to: /rgb_camera/image_rect              # rectified image

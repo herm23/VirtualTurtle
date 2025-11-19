@@ -32,10 +32,9 @@ namespace detection {
 
         // offload work to process_tag
         // note: cannot use threads here
-        for(uint32_t id : req->ids) {
+        for(uint32_t id : req->ids)
             process_tag(id, req->target_frame, res);
-            RCLCPP_INFO(this->get_logger(), "Processed one tag transformation");
-        }
+        
         RCLCPP_INFO(this->get_logger(), "Response sent");
     }
 
@@ -49,7 +48,7 @@ namespace detection {
                 "tag36h11:" + std::to_string(id),    
                 tf2::TimePointZero 
             );
-            RCLCPP_INFO(this->get_logger(), "found the transformation");
+            RCLCPP_INFO(this->get_logger(), "\t tag36h11:%d found", id);
             group28_assignament_1::msg::TagDetection detection;
             detection.id = id;
             detection.name = "tag36h11:" + std::to_string(id);
@@ -65,7 +64,7 @@ namespace detection {
             res->tags.push_back(detection);
             res->success = true;
         } catch (const tf2::TransformException &ex) {
-            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "Tag %d not found: %s", id, ex.what());
+            RCLCPP_WARN(this->get_logger(), "Tag %d NOT found: %s", id, ex.what());
         }
     }
 
