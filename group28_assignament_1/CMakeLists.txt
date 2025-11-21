@@ -16,6 +16,7 @@ find_package(tf2 REQUIRED)          # tf2
 find_package(tf2_ros REQUIRED)
 
 find_package(tf2_msgs REQUIRED)     # messages
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
@@ -80,12 +81,12 @@ ament_target_dependencies(circle_detector
   "sensor_msgs"
   "tf2"
   "tf2_ros"
-  "geometry_msgs"
+  "tf2_geometry_msgs"
 )
 target_link_libraries(circle_detector 
   ${cpp_typesupport_target}
-  utilities
   ${OpenCV_LIBS}
+  utilities
 )
 rclcpp_components_register_node(circle_detector 
   PLUGIN "detection::CircleDetector" 
@@ -93,9 +94,9 @@ rclcpp_components_register_node(circle_detector
 )
 
 
-
 ####### OTHERS #######
 install(TARGETS
+  utilities
   tag_detector
   circle_detector
   ARCHIVE DESTINATION lib
