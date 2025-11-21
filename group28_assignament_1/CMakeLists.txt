@@ -12,12 +12,14 @@ find_package(apriltag_ros_tweaked REQUIRED)
 find_package(rclcpp REQUIRED)       # component management
 find_package(rclcpp_components REQUIRED)
 
-find_package(tf2 REQUIRED)
+find_package(tf2 REQUIRED)          # tf2
 find_package(tf2_ros REQUIRED)
 
 find_package(tf2_msgs REQUIRED)     # messages
-find_package(tf2_geometry_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+find_package(OpenCV REQUIRED)       # image processing
 
 ######## CUSTOM INTERFACES ########
 find_package(rosidl_default_generators REQUIRED)
@@ -31,7 +33,22 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 rosidl_get_typesupport_target(cpp_typesupport_target
   ${PROJECT_NAME} rosidl_typesupport_cpp)
 
-######## TAG-DETECTOR LIBRARY/NODE ########
+
+######## UTILITIES SHARED LIB ########
+add_library(utilities SHARED src/utilities.cpp)
+target_include_directories(utilities PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(utilities 
+  "sensor_msgs"
+  "geometry_msgs"
+  "OpenCV"
+)
+target_link_libraries(utilities ${OpenCV_LIBS})
+
+
+######## TAG-DETECTOR NODE ########
 add_library(tag_detector SHARED src/tag_detector.cpp)
 target_include_directories(tag_detector PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -51,9 +68,36 @@ rclcpp_components_register_node(tag_detector
 )
 
 
+######## CIRCLE-DETECTOR NODE ########
+add_library(circle_detector SHARED src/circle_detector.cpp)
+target_include_directories(circle_detector PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(circle_detector
+  "rclcpp"
+  "rclcpp_components"
+  "sensor_msgs"
+  "tf2"
+  "tf2_ros"
+  "geometry_msgs"
+)
+target_link_libraries(circle_detector 
+  ${cpp_typesupport_target}
+  utilities
+  ${OpenCV_LIBS}
+)
+rclcpp_components_register_node(circle_detector 
+  PLUGIN "detection::CircleDetector" 
+  EXECUTABLE circle_detector_node
+)
+
+
+
 ####### OTHERS #######
 install(TARGETS
   tag_detector
+  circle_detector
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
