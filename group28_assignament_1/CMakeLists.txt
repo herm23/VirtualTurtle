@@ -24,6 +24,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TagDetection.msg"
   "srv/DetectTags.srv"
+  "srv/DetectCircles.srv"
   DEPENDENCIES geometry_msgs
 )
 # This is crucial for using generated interfaces in the same package
@@ -41,7 +42,6 @@ ament_target_dependencies(tag_detector
   "rclcpp_components"
   "tf2"
   "tf2_ros"
-  #"tf2_geometry_msgs"
   "geometry_msgs"
 )
 target_link_libraries(tag_detector "${cpp_typesupport_target}")
