@@ -29,6 +29,12 @@ namespace detection {
             RCLCPP_WARN(this->get_logger(), "Provide at least one apriltag id");
             res->success = false;
         }
+        if(req->target_frame.compare("map") == 0){
+            RCLCPP_WARN(
+                this->get_logger(), 
+                "issue with map as target frame: AMCL and tf use different timestamps. If nothing is received, try again using odom. Otherwise the transform has been found"
+            );
+        }
 
         // offload work to process_tag
         // note: cannot use threads here

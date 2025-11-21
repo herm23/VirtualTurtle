@@ -7,7 +7,7 @@ endif()
 
 # DEPENDENCIES
 find_package(ament_cmake REQUIRED)  # build
-find_package(apriltag_ros_tweaked REQUIRED)
+# find_package(apriltag_ros REQUIRED)
 
 find_package(rclcpp REQUIRED)       # component management
 find_package(rclcpp_components REQUIRED)
@@ -112,10 +112,16 @@ install(TARGETS
 
 install(DIRECTORY include/ DESTINATION include)
 
+####### CONFIG #######
+install(DIRECTORY cfg
+  DESTINATION share/${PROJECT_NAME}
+)
+
+
 ####### LAUNCH #######
-# install(DIRECTORY launch
-#   DESTINATION share/${PROJECT_NAME}
-# )
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
