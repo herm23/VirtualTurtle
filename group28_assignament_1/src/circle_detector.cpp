@@ -1,5 +1,3 @@
-// TODO: USE CONDITION VARIABLES AND MULTI-THREADED EXECUTOR FOR EFFICIENCY
-
 /* Author: Capuzzo Daniele */
 
 #include "group28_assignament_1/circle_detector.hpp"
@@ -94,7 +92,6 @@ namespace detection{
     }
 
     /* NON-MEMBER FUNCTIONS*/
-    // TODO: CHECK AND MODIFY
     std::vector<cv::Point2f> transform_centers(const std::vector<utils::Cluster>& clusters, const geometry_msgs::msg::TransformStamped& transform){
         std::vector<cv::Point2f> transformed_centers;
         for (const auto& cluster : clusters) {

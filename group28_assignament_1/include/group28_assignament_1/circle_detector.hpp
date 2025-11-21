@@ -23,24 +23,27 @@
 
 namespace detection{
 
-    // TODO: CHANGE COMMMENT HERE
     /** @brief ROS2 composable node which provides a structured
      *         way to detect tables/circles using 2D LiDAR data.
      * 
-     * This node constitutes the /detect_circles SERVER, which upon
-     * receiving a request (where a target frame is indicated)
-     * temporarily subscribes to the /scan topic, offloads circle detection 
-     * to an external function and returns the tables estimated center poses
-     * in the given frame.
+     * This node constitutes the /detect_circles SERVER, and simultaneously subscribes to /scan.
+     * Upon receiving a request, the node waits for a LiDAR scan to be available,
+     * processes it to detect circles and returns their estimated poses in the requested frame.
      *  
-     * This class follows the subscription-on-demand pattern (for /scan)
-     * to avoid race conditions and be able to run even on 1 thread.
+     * The request indicates the target frame for the detected circles poses
+     * and the response contains an array of geometry_msgs/Pose messages of
+     * the detected circles centers in the correct frame.
+     * A success field is included to indicate whether the detection was successful.
+     *  
+     * NOTE: this node needs to be run in a multithreaded executor
+     *       to handle /scan and /detect_circles requests simultaneously.
      */
     class CircleDetector : public rclcpp::Node{
     
     public:
         
         /** @brief class constructor
+         *  @param options: node options
          * Initializes member variables, handles the instantiation of /detect_tags server
          * as well as the subscription to /scan and /tf topics.
          */
@@ -65,18 +68,19 @@ namespace detection{
 
         /** @brief callback for /detect_circles, which starts the 
          *         circle detection pipeline and returns a response.
-         *  
+         *  @param req: pointer to the received request
+         *  @param res: pointer to the response to be sent
          * Called upon receiving a detect_circles request, saves the requested r.f
          * then ensures that a scan has been received, processes it to detect circles
          */
         void service_callback(const std::shared_ptr<group28_assignament_1::srv::DetectCircles::Request> req,
                               std::shared_ptr<group28_assignament_1::srv::DetectCircles::Response> res);
         
-        /**
-         * @brief callback that receives a single LiDAR scan.
+        /** @brief callback that receives a single LiDAR scan.
+         *  @param msg: pointer to the received LaserScan message
          *
          * Saves the received scan in a member variable protected by mutex
-         * to make the code thread-safe. 
+         * to make the code thread-safe. Then notifies waiting threads that a scan is available.
          */                     
         void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
 
@@ -88,9 +92,18 @@ namespace detection{
     }; // class CircleDetector
 
     /* NON-MEMBER FUNCTIONS */
-    // TODO: WRITE COMMENTS HERE
+    
+    /** @brief transforms only circle centers using the provided transformation
+     *  @param clusters: vector of clusters representing detected circles
+     *  @param transform: transformation to be applied to the centers
+     *  @return vector of transformed circle centers
+     */
     std::vector<cv::Point2f> transform_centers(const std::vector<utils::Cluster>& clusters, const geometry_msgs::msg::TransformStamped& transform);
 
+    /** @brief converts a 2D point to a geometry_msgs::Pose message
+     *  @param point: 2D point to be converted
+     *  @return geometry_msgs::msg::Pose message representing the point
+     */
     geometry_msgs::msg::Pose point2pose(const cv::Point2f& point);
 
 } // namespace detection
