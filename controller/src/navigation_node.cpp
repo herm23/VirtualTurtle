@@ -17,6 +17,7 @@ using ServiceT = nav2_msgs::srv::ManageLifecycleNodes;
 using ActionT  = nav2_msgs::action::NavigateToPose;
 using GoalHandleActionT = rclcpp_action::ClientGoalHandle<ActionT>;
 
+//ciao sono Angelica
 
 enum class InitSteps {
     START,
