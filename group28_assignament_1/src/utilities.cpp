@@ -72,6 +72,41 @@ namespace utils {
         return clusters;
     }
 
+    /** @brief Performs smart, distance based clustering
+     *         exploiting the ordered nature of laser scan points. 
+     * 
+     * Laser scans are acquired in order, hence points that are close in the vector
+     * are also close in space. This function exploits this fact to perform distance based
+     * agglomerative clustering in O(N) time: only consecutive points are compared.
+     * 
+     * @param points Input vector of 2D points
+     * @param threshold Distance threshold to cluster points
+     * @return Vector of clusters
+     */
+    std::vector<Cluster> smart_cluster_points(const std::vector<cv::Point2f>& points, const float threshold){
+        if(points.empty()) return {};
+
+        std::vector<Cluster> clusters;
+        // init first cluster with first point
+        Cluster initial_cluster;
+        initial_cluster.points.push_back(points[0]);
+        clusters.push_back(initial_cluster);
+        
+        // points are ordered because of the laser scan range
+        // so we only need to check distance with previous point
+        for(size_t i = 1; i < points.size(); ++i){
+            if(cv::norm(points[i] - points[i-1]) < threshold) { // close enough -> same cluster
+                clusters.back().points.push_back(points[i]);
+            } else {                                            // new cluster
+                Cluster new_cluster;
+                new_cluster.points.push_back(points[i]);
+                clusters.push_back(std::move(new_cluster));
+            }
+        }
+
+        return clusters;
+    }
+
     /** @brief Computes centroids using smart matrix operations
      * @param clusters Input/output vector of clusters (data modified in place)
      */
@@ -141,6 +176,7 @@ namespace utils {
     /** @brief Chains the pipeline together
      *          to fully process a single scan
      * @param scan Input laser scan
+     * @param smart_clustering Whether to use smart clustering or not (requires euclidian-ordered array)
      * @param cluster_threshold Distance threshold to cluster points
      * @param min_points Minimum number of points to consider a valid cluster
      * @param min_distance Minimum distance of centroid from origin
@@ -148,7 +184,7 @@ namespace utils {
      * @param max_residual Maximum residual (MAE) to consider a cluster as a
      * @return Vector of processed clusters
      */
-    std::vector<Cluster> process_scan(const sensor_msgs::msg::LaserScan& scan,
+    std::vector<Cluster> process_scan(const sensor_msgs::msg::LaserScan& scan, const bool smart_clustering,
                                       const float cluster_threshold, const int min_points,
                                       const float min_distance, const float max_radius,
                                       const float max_residual){
@@ -156,8 +192,12 @@ namespace utils {
         std::vector<cv::Point2f> points;
         lidar2pts(scan, points);
 
-        // 2-cluster them
-        std::vector<Cluster> clusters = cluster_points(points, cluster_threshold);
+        // 2-cluster points
+        std::vector<Cluster> clusters;
+        if(smart_clustering)
+            clusters = smart_cluster_points(points, cluster_threshold);
+        else
+            clusters = cluster_points(points, cluster_threshold);
 
         // 2-compute centroids
         compute_centroids(clusters);

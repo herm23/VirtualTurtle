@@ -63,11 +63,11 @@ namespace detection{
         scan_received_ = false;                             // reset flag
         lock.unlock();
         
-        RCLCPP_INFO(this->get_logger(), "GOT THE SCAN NEEDED");
+        RCLCPP_DEBUG(this->get_logger(), "GOT THE SCAN NEEDED");
         
         // start the detection pipeline
         // detections stored as local variable to ensure full isolation
-        auto detections = detect_circles(scan, req->target_frame);
+        auto detections = this->detect_circles(scan, req->target_frame);
 
         // produce the response
         res->circles.header.frame_id = req->target_frame;
@@ -81,7 +81,7 @@ namespace detection{
     // thread-safe storage of the latest scan
     // processing is performed in the service callback
     void CircleDetector::scan_callback(const LaserScan::SharedPtr msg){
-        RCLCPP_INFO(this->get_logger(), "SCAN CALLBACK CALLED...");
+        RCLCPP_DEBUG(this->get_logger(), "SCAN CALLBACK CALLED...");
         {   // protects acces to scan
             std::lock_guard<std::mutex> lock(scan_mutex_);
             last_scan_ = msg;
@@ -97,7 +97,7 @@ namespace detection{
         // create a vector to store return values
         std::vector<cv::Point2f> results;
         // compute clusters and stats
-        std::vector<utils::Cluster> clusters = utils::process_scan(*msg, 0.3f, 0, 0, 2.0f, 0.05f);
+        std::vector<utils::Cluster> clusters = utils::process_scan(*msg, true, 0.3f, 0, 0, 2.0f, 0.05f);
 
         // obtain the transform to the target frame
         TransformStamped transform;

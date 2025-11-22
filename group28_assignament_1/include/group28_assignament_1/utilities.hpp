@@ -54,6 +54,20 @@ namespace utils {
      */
     std::vector<Cluster> cluster_points(const std::vector<cv::Point2f>& points, const float threshold=0.05f);
 
+    /** @brief Performs smart, distance based clustering
+     *         exploiting the ordered nature of laser scan points. 
+     * 
+     * Laser scans are acquired in order, hence points that are close in the vector
+     * are also close in space. This function exploits this fact to perform distance based
+     * agglomerative clustering in O(N) time: only consecutive points are compared.
+     * 
+     * @param points Input vector of 2D points
+     * @param threshold Distance threshold to cluster points
+     * @return Vector of clusters
+     */
+    std::vector<Cluster> smart_cluster_points(const std::vector<cv::Point2f>& points, const float threshold=0.05f);
+
+
     /** @brief Computes centroids using smart matrix operations
      * @param clusters Input/output vector of clusters (data modified in place)
      */
@@ -87,6 +101,7 @@ namespace utils {
      * @return Vector of processed clusters
      */
     std::vector<Cluster> process_scan(const sensor_msgs::msg::LaserScan& scan,
+                                      const bool smart_clustering = false,
                                       const float cluster_threshold = 0.3f,
                                       const int min_points = 3,
                                       const float min_distance = 0.1f,
