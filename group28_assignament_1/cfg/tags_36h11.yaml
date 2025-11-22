@@ -13,13 +13,12 @@
             refine: True        # snap to strong gradients
             sharpening: 0.25    # sharpening of decoded images
             debug: False        # write additional debugging images to current working directory
-            publish_tf: True 
-
+            publish_tf: True    # TROUBLEMAKER
 
         pose_estimation_method: "pnp"   # method for estimating the tag pose
 
-        #optional list of tags
-        tag:
-            ids: [1,10]            # tag ID
-            frames: [external_camera_link, external_camera_link]  # optional frame name
-            sizes: [0.050, 0.050]   # optional tag-specific edge size
+    #optional list of tags
+    tag:
+        ids: [0,1,2]                            # tag ID
+        # frames: [which_frame, which_frame]    # optional frame name
+        sizes: [0.050, 0.050]                   # optional tag-specific edge size
