@@ -15,6 +15,7 @@
 
 #include <tf2_ros/buffer.h>                                     // transformations
 #include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include <mutex>                                                // C++ ones
 #include <string>
@@ -51,7 +52,6 @@ namespace detection{
 
     private:
         /* MEMBER VARIABLES */
-        std::vector<cv::Point2f> detections;                                                // detections storage
         rclcpp::Service<group28_assignament_1::srv::DetectCircles>::SharedPtr service_;     // service server
         rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;             // scan subscription
         sensor_msgs::msg::LaserScan::SharedPtr last_scan_;                                  // latest scan
@@ -84,15 +84,16 @@ namespace detection{
          */                     
         void scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg);
 
-        /**
-         * @brief clears previous detections and resets node.
+        /** @brief processes a given LaserScan to detect circles
+         *  @param msg: pointer to the LaserScan message to be processed
+         *  @param target_frame: reference frame in which to express the detected circles poses
+         *  Populates the detections member variable with the detected circles centers in the target frame.
          */
-        void reset();
+        std::vector<cv::Point2f> detect_circles(const sensor_msgs::msg::LaserScan::SharedPtr msg, std::string target_frame);
 
     }; // class CircleDetector
 
     /* NON-MEMBER FUNCTIONS */
-    
     /** @brief transforms only circle centers using the provided transformation
      *  @param clusters: vector of clusters representing detected circles
      *  @param transform: transformation to be applied to the centers

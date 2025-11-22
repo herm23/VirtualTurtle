@@ -4,14 +4,15 @@
 
 using namespace std::placeholders; // for _1, _2, ...
 using namespace group28_assignament_1;
+using namespace sensor_msgs::msg;
+using namespace geometry_msgs::msg;
 
 namespace detection{
 
     /** MEMBER VARIABLES RECAP 
-     * std::vector<cv::Point2f> detections;                                                 // detections storage
      * rclcpp::Service<group28_assignament_1::srv::DetectCircles>::SharedPtr service_;      // service server
-     * rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_sub_;              // scan subscription
-     * sensor_msgs::msg::LaserScan::SharedPtr last_scan_;                                   // latest scan
+     * rclcpp::Subscription<LaserScan>::SharedPtr scan_sub_;                                // scan subscription
+     * LaserScan::SharedPtr last_scan_;                                                     // latest scan
      * bool scan_received_;                                                                 // flag for scan reception
      * std::mutex scan_mutex_;                                                              // thread synchronization
      * std::condition_variable scan_cv_;
@@ -32,7 +33,7 @@ namespace detection{
         );
         
         // SUBSCRIBER to scan topic
-        scan_sub_ = this->create_subscription<sensor_msgs::msg::LaserScan>(
+        scan_sub_ = this->create_subscription<LaserScan>(
             "/scan", 10, 
             std::bind(&CircleDetector::scan_callback, this, _1)
         );
@@ -49,7 +50,7 @@ namespace detection{
                                           std::shared_ptr<srv::DetectCircles::Response> res){
         
         RCLCPP_INFO(this->get_logger(), "REQUEST received for frame: %s", req->target_frame.c_str());
-        sensor_msgs::msg::LaserScan::SharedPtr scan; // local copy to work on
+        LaserScan::SharedPtr scan; // local copy to work on
 
         // wait for the scan with timeout
         std::unique_lock<std::mutex> lock(scan_mutex_);
@@ -58,23 +59,28 @@ namespace detection{
             res->success = false;
             return;
         }
-        scan = last_scan_;          // store copy to avoid re-locking
-        scan_received_ = false;     // reset flag
+        scan = std::make_shared<LaserScan>(*last_scan_);    // store deep-copy to avoid re-locking
+        scan_received_ = false;                             // reset flag
         lock.unlock();
         
         RCLCPP_INFO(this->get_logger(), "GOT THE SCAN NEEDED");
         
-        // produce and send response
+        // start the detection pipeline
+        // detections stored as local variable to ensure full isolation
+        auto detections = detect_circles(scan, req->target_frame);
+
+        // produce the response
+        res->circles.header.frame_id = req->target_frame;
+        res->circles.header.stamp = scan->header.stamp;
+        for (const auto & det : detections)
+            res->circles.poses.push_back(point2pose(det));       // point2f -> pose
+
         res->success = true;
-
-        // TODO: process the scan
-        reset();
-
     }
 
     // thread-safe storage of the latest scan
     // processing is performed in the service callback
-    void CircleDetector::scan_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg){
+    void CircleDetector::scan_callback(const LaserScan::SharedPtr msg){
         RCLCPP_INFO(this->get_logger(), "SCAN CALLBACK CALLED...");
         {   // protects acces to scan
             std::lock_guard<std::mutex> lock(scan_mutex_);
@@ -86,18 +92,47 @@ namespace detection{
 
     
     /* HELPERS*/
-    void CircleDetector::reset(){
-        detections.clear();
-        RCLCPP_INFO(this->get_logger(), "Node reset completed.");
+    std::vector<cv::Point2f> CircleDetector::detect_circles(const LaserScan::SharedPtr msg, std::string target_frame) {
+
+        // create a vector to store return values
+        std::vector<cv::Point2f> results;
+        // compute clusters and stats
+        std::vector<utils::Cluster> clusters = utils::process_scan(*msg, 0.3f, 0, 0, 2.0f, 0.05f);
+
+        // obtain the transform to the target frame
+        TransformStamped transform;
+        try {
+            transform = tf_buffer_->lookupTransform(target_frame, msg->header.frame_id,tf2::TimePointZero );
+        } catch (const tf2::TransformException& ex) {
+            RCLCPP_WARN_THROTTLE(
+                this->get_logger(),
+                *this->get_clock(),
+                5000,  // throttle to once per 5 seconds
+                "Could not get transform: %s", ex.what()
+            );
+            return {};
+        }
+
+        // transform all the centers (already discards non circles)
+        std::vector<cv::Point2f> transformed_centers = transform_centers(clusters, transform);
+
+        // save transformed centers
+        for (const auto & center : transformed_centers) {
+            results.push_back(center);
+            RCLCPP_INFO(this->get_logger(), "New table detected at (%.2f, %.2f)", center.x, center.y);
+        }
+
+        return results;
     }
 
+
     /* NON-MEMBER FUNCTIONS*/
-    std::vector<cv::Point2f> transform_centers(const std::vector<utils::Cluster>& clusters, const geometry_msgs::msg::TransformStamped& transform){
+    std::vector<cv::Point2f> transform_centers(const std::vector<utils::Cluster>& clusters, const TransformStamped& transform){
         std::vector<cv::Point2f> transformed_centers;
         for (const auto& cluster : clusters) {
             if (cluster.type == 'c') {  // only circles
                 // create point in source frame
-                geometry_msgs::msg::PointStamped point_in, point_out;
+                PointStamped point_in, point_out;
                 point_in.point.x = cluster.centroid.x;
                 point_in.point.y = cluster.centroid.y;
                 point_in.point.z = 0.0;
@@ -110,8 +145,8 @@ namespace detection{
         return transformed_centers;
     }
 
-    geometry_msgs::msg::Pose point2pose(const cv::Point2f& point) {
-        geometry_msgs::msg::Pose pose;
+    Pose point2pose(const cv::Point2f& point) {
+        Pose pose;
         pose.position.x = point.x;  // 2d point
         pose.position.y = point.y;
         pose.position.z = 0.0;
