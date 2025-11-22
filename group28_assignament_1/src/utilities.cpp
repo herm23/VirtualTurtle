@@ -174,7 +174,7 @@ namespace utils {
     }
 
     /** @brief Chains the pipeline together
-     *          to fully process a single scan
+     *         to fully process a single scan
      * @param scan Input laser scan
      * @param smart_clustering Whether to use smart clustering or not (requires euclidian-ordered array)
      * @param cluster_threshold Distance threshold to cluster points

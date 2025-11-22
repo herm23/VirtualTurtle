@@ -91,7 +91,7 @@ namespace utils {
     void detect_circles(std::vector<Cluster>& clusters, float max_radius = 1.0f, float max_residual = 0.02f);
 
     /** @brief Chains the pipeline together
-     *          to fully process a single scan
+     *         to fully process a single scan
      * @param scan Input laser scan
      * @param cluster_threshold Distance threshold to cluster points
      * @param min_points Minimum number of points to consider a valid cluster
