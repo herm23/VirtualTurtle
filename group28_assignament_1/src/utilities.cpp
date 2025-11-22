@@ -2,8 +2,10 @@
 
 namespace utils {
 
-    /* Function that converts data from laserscans
-     * into a set of 2D points in a cartesian frame
+    /** @brief Function that converts data from laserscans
+     *         into a set of 2D points in a cartesian frame
+     * @param scan Input laser scan
+     * @param points Output vector of 2D points
      */
     void lidar2pts(const sensor_msgs::msg::LaserScan& scan, std::vector<cv::Point2f>& points){
         // create vector of points and reserve memory
@@ -21,9 +23,10 @@ namespace utils {
         }
     }
 
-    /* Function that converts a cluster into a matrix of points
-     * specifically an Nx2 one to work with opencv linalg routines.
-     * The matrix is NOT a binary image.
+    /** @brief Converts a cluster into an Nx2 matrix of points
+     *         to work with opencv linalg routines. The matrix is NOT a binary image.
+     * @param cls Input cluster
+     * @param mat Output matrix of points.
      */
     void cluster2mat(const Cluster& cls, cv::Mat& mat){
         if(cls.points.empty()) {mat = cv::Mat(); return;}
@@ -42,8 +45,11 @@ namespace utils {
         }
     }
     
-    /* Function that performs simple, distance based clustering
-     * using O(N^2) cv::partition on a point array
+    /** @brief Performs simple, distance based clustering
+     *         using O(N^2) cv::partition on a point array.
+     * @param points Input vector of 2D points
+     * @param threshold Distance threshold to cluster points
+     * @return Vector of clusters
      */
     std::vector<Cluster> cluster_points(const std::vector<cv::Point2f>& points, const float threshold){
         if(points.empty()) return {};
@@ -66,9 +72,8 @@ namespace utils {
         return clusters;
     }
 
-    
-    /* Function that computes cluster centroids
-     * given a vector of clusters using smart matrix operations
+    /** @brief Computes centroids using smart matrix operations
+     * @param clusters Input/output vector of clusters (data modified in place)
      */
     void compute_centroids(std::vector<Cluster>& clusters){
         for (auto& cluster : clusters) {
@@ -86,9 +91,12 @@ namespace utils {
         }
     }
 
-    /* Function that refines clusters removing noise
-     * and small clusters, or those whose centroid
-     * is too close (inside the robot)
+    /** @brief Refines clusters removing noise
+     *         and small clusters, or those whose centroid
+     *         is too close (inside the robot)
+     * @param clusters Input/output vector of clusters
+     * @param min_points Minimum number of points to consider a valid cluster
+     * @param min_distance Minimum distance of centroid from origin
      */
     void refine_clusters( std::vector<Cluster>& clusters, const float min_points, const float min_distance) {                            
         // remove clusters with less than min_points
@@ -130,6 +138,16 @@ namespace utils {
         }
     }
 
+    /** @brief Chains the pipeline together
+     *          to fully process a single scan
+     * @param scan Input laser scan
+     * @param cluster_threshold Distance threshold to cluster points
+     * @param min_points Minimum number of points to consider a valid cluster
+     * @param min_distance Minimum distance of centroid from origin
+     * @param max_radius Maximum radius to consider a cluster as a circle
+     * @param max_residual Maximum residual (MAE) to consider a cluster as a
+     * @return Vector of processed clusters
+     */
     std::vector<Cluster> process_scan(const sensor_msgs::msg::LaserScan& scan,
                                       const float cluster_threshold, const int min_points,
                                       const float min_distance, const float max_radius,
@@ -154,7 +172,12 @@ namespace utils {
         return clusters;
     }
 
-
+    /** @brief Visualizes clusters in a simple OpenCV window
+     * @param clusters Input vector of clusters
+     * @param output Output image where to draw the clusters
+     * @param image_size Size of the output image (image_size x image_size)
+     * @param scale Scaling factor to convert from world to image coordinates
+     */
     void visualize_clusters(const std::vector<Cluster>& clusters, cv::Mat& output, int image_size, float scale) {
 
         output = cv::Mat(image_size, image_size, CV_8UC3, cv::Scalar(255, 255, 255));
@@ -184,7 +207,7 @@ namespace utils {
 
         cv::imshow("Clusters", output);
         cv::waitKey(0);
-}
+    }
 
 
 } // namespace
