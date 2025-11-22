@@ -10,4 +10,74 @@ ros2 topic pub -t 1 /scan sensor_msgs/msg/LaserScan
 ros2 topic pub /scan sensor_msgs/msg/LaserScan
 
 # call the service to request detection
-ros2 service call /detect_circles group28_assignament_1/srv/DetectCircles "{target_frame: 'base_link'}"
+ros2 service call /detect_circles group28_assignament_1/srv/DetectCircles "{target_frame: 'odom'}"
+
+SHOW POSES ON RVIZ THROUGH COMMAND LINE (TAKEN FROM AN ORIGINAL RESPONSE OF algorithmV1)
+ros2 topic pub -1 /waypoints visualization_msgs/msg/MarkerArray "
+markers:
+  # Marker ID 0 (Original)
+  - header:
+      frame_id: \"odom\"
+      stamp: {sec: 0, nanosec: 0}
+    ns: \"circles\"
+    id: 0
+    type: 2 # SPHERE
+    action: 0 # ADD
+    pose:
+      position: {x: 13.210116386413574, y: -1.5995919704437256, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    scale: {x: 0.3, y: 0.3, z: 0.3}
+    color: {r: 1.0, g: 0.0, b: 0.0, a: 1.0}
+
+  - header:
+      frame_id: \"odom\"
+      stamp: {sec: 0, nanosec: 0}
+    ns: \"circles\"
+    id: 1
+    type: 2
+    action: 0
+    pose:
+      position: {x: 13.480852127075195, y: 1.4773766994476318, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    scale: {x: 0.3, y: 0.3, z: 0.3}
+    color: {r: 1.0, g: 0.0, b: 0.0, a: 1.0}
+
+  - header:
+      frame_id: \"odom\"
+      stamp: {sec: 0, nanosec: 0}
+    ns: \"circles\"
+    id: 2
+    type: 2
+    action: 0
+    pose:
+      position: {x: 10.762063026428223, y: -1.0357805490493774, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    scale: {x: 0.3, y: 0.3, z: 0.3}
+    color: {r: 1.0, g: 0.0, b: 0.0, a: 1.0}
+
+  - header:
+      frame_id: \"odom\"
+      stamp: {sec: 0, nanosec: 0}
+    ns: \"circles\"
+    id: 3
+    type: 2
+    action: 0
+    pose:
+      position: {x: 6.577794551849365, y: -4.9370856285095215, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    scale: {x: 0.3, y: 0.3, z: 0.3}
+    color: {r: 1.0, g: 0.0, b: 0.0, a: 1.0}
+
+  - header:
+      frame_id: \"odom\"
+      stamp: {sec: 0, nanosec: 0}
+    ns: \"circles\"
+    id: 4
+    type: 2
+    action: 0
+    pose:
+      position: {x: 11.746542930603027, y: -3.7715837955474854, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    scale: {x: 0.3, y: 0.3, z: 0.3}
+    color: {r: 1.0, g: 0.0, b: 0.0, a: 1.0}
+"
