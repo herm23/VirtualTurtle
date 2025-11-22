@@ -11,6 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(group28_assignament_1 REQUIRED)
 
 add_executable(navigation_node src/navigation_node.cpp)
 ament_target_dependencies(navigation_node
@@ -18,6 +19,7 @@ ament_target_dependencies(navigation_node
   rclcpp_action
   geometry_msgs
   nav2_msgs
+  group28_assignament_1
 )
 
 install(TARGETS

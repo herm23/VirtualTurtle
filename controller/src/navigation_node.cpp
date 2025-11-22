@@ -5,7 +5,11 @@
 #include <ctime>
 #include <random>
 #include <array>
+#include <vector>
+#include <cstdint>
 
+#include "group28_assignament_1/srv/detect_tags.hpp"
+#include "group28_assignament_1/msg/tag_detection.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "nav2_msgs/srv/manage_lifecycle_nodes.hpp"
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
@@ -16,6 +20,8 @@ using namespace std::chrono_literals;
 using ServiceT = nav2_msgs::srv::ManageLifecycleNodes;
 using ActionT  = nav2_msgs::action::NavigateToPose;
 using GoalHandleActionT = rclcpp_action::ClientGoalHandle<ActionT>;
+using DetectApriltagSrv = group28_assignament_1::srv::DetectTags;
+using TagDetectionMsg  = group28_assignament_1::msg::TagDetection;
 
 //ciao sono Angelica
 
@@ -48,6 +54,8 @@ public:
       "/navigate_to_pose"   // stesso nome del comando CLI
     );
 
+    // SERVICE CLIENT PER DETECTION TAGS (detect_circles)
+    detect_apriltag_client_ = this->create_client<DetectApriltagSrv>("/detect_tags");
 
     RCLCPP_INFO(this->get_logger(), "localization client init\n");
 
@@ -257,7 +265,69 @@ public:
     }
   }
 
-  
+  bool call_detect_apriltags()
+  {
+    auto request = std::make_shared<DetectApriltagSrv::Request>();
+
+    // ID da cercare
+    std::vector<uint32_t> ids = {1, 10};
+    const std::string target_frame = "odom";
+
+    request->ids = ids;
+    request->target_frame = target_frame;
+
+    // Aspetto che il service sia disponibile
+    while (!detect_apriltag_client_->wait_for_service(1s)) {
+      if (!rclcpp::ok()) {
+        RCLCPP_ERROR(this->get_logger(),"Interrupted while waiting for /detect_tags service. Exiting.");
+        return false;
+      }
+
+      RCLCPP_INFO(this->get_logger(),"/detect_tags service not available, waiting again...");
+    }
+
+    RCLCPP_INFO(this->get_logger(),"Calling /detect_tags with %zu ids in target_frame='%s'",ids.size(), target_frame.c_str());
+
+    auto self = this->shared_from_this();
+    auto future = detect_apriltag_client_->async_send_request(request);
+
+    auto ret = rclcpp::spin_until_future_complete(self, future);
+    if (ret != rclcpp::FutureReturnCode::SUCCESS) {
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Failed to call /detect_tags (spin_until_future_complete)");
+      return false;
+    }
+
+    auto response = future.get();
+    if (!response->success) {
+      RCLCPP_WARN(this->get_logger(), "/detect_tags returned success=false");
+      return false;
+    }
+
+    std::vector<TagDetectionMsg> tags_out = response->tags;
+
+    RCLCPP_INFO(this->get_logger(),"Received %zu tags from /detect_tags",tags_out.size());
+
+    for (const auto & tag : tags_out) {
+      const auto & p = tag.pose.pose.position;
+      const auto & q = tag.pose.pose.orientation;
+
+      RCLCPP_INFO(this->get_logger(),
+        "Tag id=%u name='%s' frame_id='%s' "
+        "pos=(%.3f, %.3f, %.3f) "
+        "orient=(%.3f, %.3f, %.3f, %.3f)",
+        tag.id,
+        tag.name.c_str(),
+        tag.pose.header.frame_id.c_str(),
+        p.x, p.y, p.z,
+        q.x, q.y, q.z, q.w
+      );
+    }
+
+    return true;
+  }
+
 
 private:
   //Class Members
@@ -268,7 +338,7 @@ private:
   bool amcl_received_ = false;
   geometry_msgs::msg::PoseWithCovarianceStamped last_amcl_pose_;
   rclcpp_action::Client<ActionT>::SharedPtr navigate_action_client_;
-
+  rclcpp::Client<DetectApriltagSrv>::SharedPtr detect_apriltag_client_;
 
   rclcpp::Client<ServiceT>::SharedFuture send_client_request(bool isLocalization)
   {
@@ -305,22 +375,25 @@ int main(int argc, char * argv[])
   rclcpp::init(argc, argv);
   std::shared_ptr<NavigationNode> nav_node = std::make_shared<NavigationNode>();
   
-  //STEP 1
-  auto result_localization = nav_node->send_localization_request();
-  nav_node->handle_result(result_localization, "/lifecycle_manager_localization/manage_nodes");
+  // STEP 0
+  nav_node->call_detect_apriltags();
 
-  //STEP 2
-  nav_node->publish_initial_pose();
+  // //STEP 1
+  // auto result_localization = nav_node->send_localization_request();
+  // nav_node->handle_result(result_localization, "/lifecycle_manager_localization/manage_nodes");
 
-   //STEP 2.5 - la posa è stata recepità ?
-  nav_node->wait_for_amcl_pose();
+  // //STEP 2
+  // nav_node->publish_initial_pose();
 
-  //STEP 3
-  auto result_nav = nav_node->send_navigation_request();
-  nav_node->handle_result(result_nav, "/lifecycle_manager_navigation/manage_nodes");
+  //  //STEP 2.5 - la posa è stata recepità ?
+  // nav_node->wait_for_amcl_pose();
 
-  //STEP 4
-  nav_node->send_navigate_goal();
+  // //STEP 3
+  // auto result_nav = nav_node->send_navigation_request();
+  // nav_node->handle_result(result_nav, "/lifecycle_manager_navigation/manage_nodes");
+
+  // //STEP 4
+  // nav_node->send_navigate_goal();
 
   rclcpp::shutdown();
   return 0;
