@@ -165,22 +165,50 @@ public:
     }
   }
 
-  void send_navigate_goal()
+  void send_navigate_goal(geometry_msgs::msg::Point goal_point)
   {
     if (!navigate_action_client_->wait_for_action_server(5s)) {
       RCLCPP_ERROR(this->get_logger(), "Action server /navigate_to_pose not available");
       return;
     }
 
-    //NOTE: Definiamo posizione statica, sarà da legere dal server "/goal_pose"
+    #pragma region 
+    // //NOTE: Definiamo posizione statica, sarà da legere dal server "/goal_pose"
+    // ActionT::Goal goal;
+    // goal.pose.header.frame_id = "map";
+    // goal.pose.header.stamp = this->now();
+
+    // goal.pose.pose.position.x = 12.5;
+    // goal.pose.pose.position.y = -2.6;
+    // goal.pose.pose.position.z = 0.0;
+
+    // goal.pose.pose.orientation.x = 0.0;
+    // goal.pose.pose.orientation.y = 0.0;
+    // goal.pose.pose.orientation.z = 0.7071;
+    // goal.pose.pose.orientation.w = 0.7071;
+
+    // RCLCPP_INFO(
+    //   this->get_logger(),
+    //   "Sending NavigateToPose goal: x=%.2f, y=%.2f, z=%.2f, qz=%.4f, qw=%.4f",
+    //   goal.pose.pose.position.x,
+    //   goal.pose.pose.position.y,
+    //   goal.pose.pose.position.z,
+    //   goal.pose.pose.orientation.z,
+    //   goal.pose.pose.orientation.w
+    // );
+    #pragma endregion
+
     ActionT::Goal goal;
     goal.pose.header.frame_id = "map";
     goal.pose.header.stamp = this->now();
 
-    goal.pose.pose.position.x = 12.5;
-    goal.pose.pose.position.y = -2.6;
-    goal.pose.pose.position.z = 0.0;
+    goal.pose.pose.position.x = goal_point.x;
+    goal.pose.pose.position.y = goal_point.y;
+    goal.pose.pose.position.z = goal_point.z;
 
+
+    //TO DO: CALCOLARE ANCHE ORIENTATION DA POINT 
+    //Lasciamo il robot dritto quando arriva al goal
     goal.pose.pose.orientation.x = 0.0;
     goal.pose.pose.orientation.y = 0.0;
     goal.pose.pose.orientation.z = 0.7071;
@@ -265,8 +293,10 @@ public:
     }
   }
 
-  bool call_detect_apriltags()
+  geometry_msgs::msg::Point call_detect_apriltags()
   {
+    geometry_msgs::msg::Point midpoint;
+
     auto request = std::make_shared<DetectApriltagSrv::Request>();
 
     // ID da cercare
@@ -280,7 +310,7 @@ public:
     while (!detect_apriltag_client_->wait_for_service(1s)) {
       if (!rclcpp::ok()) {
         RCLCPP_ERROR(this->get_logger(),"Interrupted while waiting for /detect_tags service. Exiting.");
-        return false;
+        return midpoint;
       }
 
       RCLCPP_INFO(this->get_logger(),"/detect_tags service not available, waiting again...");
@@ -296,27 +326,34 @@ public:
       RCLCPP_ERROR(
         this->get_logger(),
         "Failed to call /detect_tags (spin_until_future_complete)");
-      return false;
+      return midpoint;
     }
 
     auto response = future.get();
     if (!response->success) {
       RCLCPP_WARN(this->get_logger(), "/detect_tags returned success=false");
-      return false;
+      return midpoint;
     }
 
     std::vector<TagDetectionMsg> tags_out = response->tags;
 
     RCLCPP_INFO(this->get_logger(),"Received %zu tags from /detect_tags",tags_out.size());
 
-    for (const auto & tag : tags_out) {
+    if (tags_out.size() < 2) {
+      RCLCPP_WARN(this->get_logger(), "Less than 2 tags received, cannot compute midpoint.");
+      return midpoint;
+    }
+
+    for (size_t i = 0; i < 2; ++i) {
+      const auto & tag = tags_out[i];
       const auto & p = tag.pose.pose.position;
       const auto & q = tag.pose.pose.orientation;
 
       RCLCPP_INFO(this->get_logger(),
-        "Tag id=%u name='%s' frame_id='%s' "
+        "Tag[%zu] id=%u name='%s' frame_id='%s' "
         "pos=(%.3f, %.3f, %.3f) "
         "orient=(%.3f, %.3f, %.3f, %.3f)",
+        i,
         tag.id,
         tag.name.c_str(),
         tag.pose.header.frame_id.c_str(),
@@ -325,7 +362,15 @@ public:
       );
     }
 
-    return true;
+    const auto & p1 = tags_out[0].pose.pose.position;
+    const auto & p2 = tags_out[1].pose.pose.position;
+
+    midpoint.x = (p1.x + p2.x) / 2.0;
+    midpoint.y = (p1.y + p2.y) / 2.0;
+    midpoint.z = (p1.z + p2.z) / 2.0;
+
+    RCLCPP_INFO(this->get_logger(),"Midpoint between first two tags: (%.3f, %.3f, %.3f)", midpoint.x, midpoint.y, midpoint.z);
+    return midpoint;
   }
 
 
@@ -376,24 +421,24 @@ int main(int argc, char * argv[])
   std::shared_ptr<NavigationNode> nav_node = std::make_shared<NavigationNode>();
   
   // STEP 0
-  nav_node->call_detect_apriltags();
+  geometry_msgs::msg::Point goal_point = nav_node->call_detect_apriltags();
 
-  // //STEP 1
-  // auto result_localization = nav_node->send_localization_request();
-  // nav_node->handle_result(result_localization, "/lifecycle_manager_localization/manage_nodes");
+  //STEP 1
+  auto result_localization = nav_node->send_localization_request();
+  nav_node->handle_result(result_localization, "/lifecycle_manager_localization/manage_nodes");
 
-  // //STEP 2
-  // nav_node->publish_initial_pose();
+  //STEP 2
+  nav_node->publish_initial_pose();
 
-  //  //STEP 2.5 - la posa è stata recepità ?
-  // nav_node->wait_for_amcl_pose();
+   //STEP 2.5 - la posa è stata recepità ?
+  nav_node->wait_for_amcl_pose();
 
-  // //STEP 3
-  // auto result_nav = nav_node->send_navigation_request();
-  // nav_node->handle_result(result_nav, "/lifecycle_manager_navigation/manage_nodes");
+  //STEP 3
+  auto result_nav = nav_node->send_navigation_request();
+  nav_node->handle_result(result_nav, "/lifecycle_manager_navigation/manage_nodes");
 
-  // //STEP 4
-  // nav_node->send_navigate_goal();
+  //STEP 4
+  nav_node->send_navigate_goal(goal_point);
 
   rclcpp::shutdown();
   return 0;
