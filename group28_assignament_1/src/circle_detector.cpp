@@ -97,7 +97,13 @@ namespace detection{
         // create a vector to store return values
         std::vector<cv::Point2f> results;
         // compute clusters and stats
-        std::vector<utils::Cluster> clusters = utils::process_scan(*msg, true, 0.3f, 0, 0, 2.0f, 0.05f);
+        std::vector<utils::Cluster> clusters = utils::process_scan(*msg, true, 0.3f, 3, 0, 2.0f, 0.05f);
+
+        // show the clusters here
+        // cv::Mat latest_frame;
+        // utils::visualize_clusters(clusters, latest_frame);
+        // cv::imshow("Clusters", latest_frame);
+        // cv::waitKey(1);
 
         // obtain the transform to the target frame
         TransformStamped transform;
