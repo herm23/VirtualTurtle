@@ -97,7 +97,7 @@ namespace detection{
         // create a vector to store return values
         std::vector<cv::Point2f> results;
         // compute clusters and stats
-        std::vector<utils::Cluster> clusters = utils::process_scan(*msg, true, 0.3f, 3, 0, 2.0f, 0.05f);
+        std::vector<utils::Cluster> clusters = utils::process_scan(*msg, true, 0.3f, 3, 0, 2.0f, 1.8f, 0.05f);
 
         // show the clusters here
         // cv::Mat latest_frame;
@@ -108,7 +108,7 @@ namespace detection{
         // obtain the transform to the target frame
         TransformStamped transform;
         try {
-            transform = tf_buffer_->lookupTransform(target_frame, msg->header.frame_id,tf2::TimePointZero );
+            transform = tf_buffer_->lookupTransform(target_frame, msg->header.frame_id, tf2::TimePointZero);
         } catch (const tf2::TransformException& ex) {
             RCLCPP_WARN_THROTTLE(
                 this->get_logger(),

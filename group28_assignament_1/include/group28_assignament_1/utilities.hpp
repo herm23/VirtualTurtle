@@ -88,7 +88,16 @@ namespace utils {
      * @param max_radius Maximum radius to consider a cluster as a circle
      * @param max_residual Maximum residual (MAE) to consider a cluster as a circle
      */
-    void detect_circles(std::vector<Cluster>& clusters, float max_radius = 1.0f, float max_residual = 0.02f);
+    void detect_circles(std::vector<Cluster>& clusters, float max_radius = 1.0f, float max_axis_ratio=1.2, float max_residual = 0.02f);
+
+    /** @brief Fits an ellipse to the cluster points and decides
+     *         whether it can be considered a circle based on axis ratio.
+     *  @param cls Input cluster
+     *  @param center Output center of the fitted circle
+     *  @param radius Output radius of the fitted circle
+     *  @param max_axis_ratio Maximum allowed ratio between major and minor axis
+     */
+    void fit_ellipse(Cluster cls, cv::Point2f& center, float& radius, float max_axis_ratio=1.2);
 
     /** @brief Chains the pipeline together
      *         to fully process a single scan
@@ -106,6 +115,7 @@ namespace utils {
                                       const int min_points = 3,
                                       const float min_distance = 0.1f,
                                       const float max_radius = 1.0f,
+                                      float max_axis_ratio=1.2f,
                                       const float max_residual = 0.05f);
 
     /** @brief Visualizes clusters in a simple OpenCV window

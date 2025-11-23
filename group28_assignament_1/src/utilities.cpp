@@ -144,23 +144,29 @@ namespace utils {
         clusters.erase(iterator, clusters.end());
     }
 
-    void detect_circles(std::vector<Cluster>& clusters, float max_radius, float max_residual){
-        for(auto& cls: clusters){
-            // temp variables where to put center and radius
-            cv::Point2f center;
+    void detect_circles(std::vector<Cluster>& clusters, float max_radius, float max_axis_ratio, float max_residual){
+
+        for( auto& cls: clusters ){
+            cv::Point2f center;     // placeholders
             float radius=0.f;
+            int n = cls.points.size();
 
-            // try to fit a circle to the cluster
-            cv::minEnclosingCircle(cls.points, center, radius);
-
-            // if the radius is too high, classify it as a line
-            if(radius > max_radius){ cls.type='l'; continue; }
+            // fit a circle or ellipse
+            if( n < 5 )
+                cv::minEnclosingCircle(cls.points, center, radius); // fallback
+            else{
+                fit_ellipse(cls, center, radius, max_axis_ratio);   // needs 5 points
+                if(cls.type == 'l') continue;                       // too elongated ellipse -> line
+            }
+                
+            // we have circle candidates that still need to be verified
+            if(radius > max_radius){ cls.type='l'; continue; } // radius too high -> line
 
             // compute residual (MAE)
             float mae = 0.0f;
-            for (const auto& p : cls.points) {
+            for (const auto& p : cls.points)
                 mae += std::abs(cv::norm(p - center) - radius);
-            }
+
             mae /= cls.points.size();
 
             // bad fit --> line
@@ -173,6 +179,27 @@ namespace utils {
         }
     }
 
+    void fit_ellipse(Cluster cls, cv::Point2f& center, float& radius, float max_axis_ratio){
+        int n = cls.points.size();
+        if( n < 5 ) return;
+        
+        cv::RotatedRect ellipse = cv::fitEllipse(cls.points);
+        float a = ellipse.size.width / 2.f;
+        float b = ellipse.size.height / 2.f;
+
+        // circularity check
+        float axis_ratio = std::max(a, b) / std::min(a, b);
+        if (axis_ratio > max_axis_ratio) {
+            cls.type = 'l';
+            return;
+        }
+
+        // supposed to be a circle, still to be verified
+        center = ellipse.center;
+        radius = (a + b) / 2.f;
+    }
+
+
     /** @brief Chains the pipeline together
      *         to fully process a single scan
      * @param scan Input laser scan
@@ -181,12 +208,13 @@ namespace utils {
      * @param min_points Minimum number of points to consider a valid cluster
      * @param min_distance Minimum distance of centroid from origin
      * @param max_radius Maximum radius to consider a cluster as a circle
+     * @param max_axis_ratio Maximum axis ratio to consider a fitted ellipse as a circle
      * @param max_residual Maximum residual (MAE) to consider a cluster as a
      * @return Vector of processed clusters
      */
     std::vector<Cluster> process_scan(const sensor_msgs::msg::LaserScan& scan, const bool smart_clustering,
                                       const float cluster_threshold, const int min_points,
-                                      const float min_distance, const float max_radius,
+                                      const float min_distance, const float max_radius, float max_axis_ratio,
                                       const float max_residual){
         // 1-convert scan to points
         std::vector<cv::Point2f> points;
@@ -208,7 +236,7 @@ namespace utils {
             refine_clusters(clusters, min_points, min_distance);
 
         // 5-detect circles
-        detect_circles(clusters, max_radius, max_residual);
+        detect_circles(clusters, max_radius, max_axis_ratio, max_residual);
         return clusters;
     }
 
