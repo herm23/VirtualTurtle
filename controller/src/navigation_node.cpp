@@ -492,8 +492,9 @@ private:
     const double angle_increment = static_cast<double>(msg->angle_increment);
 
     // Range di angoli che ti interessa [rad]
-    const double target_angle_min = 3.92;
-    const double target_angle_max = 5.49;
+    //Seleziono solo l'angolatura destra
+    const double target_angle_min = 3.92; //5/4 pigreco
+    const double target_angle_max = 5.49; //7/4 pigreco
 
     double sum_distances = 0.0;
     std::size_t count    = 0;
