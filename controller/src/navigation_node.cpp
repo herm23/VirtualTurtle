@@ -9,6 +9,7 @@
 #include <cstdint>
 
 #include "group28_assignament_1/srv/detect_tags.hpp"
+#include "group28_assignament_1/srv/detect_circles.hpp"
 #include "group28_assignament_1/msg/tag_detection.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "nav2_msgs/srv/manage_lifecycle_nodes.hpp"
@@ -21,6 +22,7 @@ using ServiceT = nav2_msgs::srv::ManageLifecycleNodes;
 using ActionT  = nav2_msgs::action::NavigateToPose;
 using GoalHandleActionT = rclcpp_action::ClientGoalHandle<ActionT>;
 using DetectApriltagSrv = group28_assignament_1::srv::DetectTags;
+using DetectCirclesSrv = group28_assignament_1::srv::DetectCircles;
 using TagDetectionMsg  = group28_assignament_1::msg::TagDetection;
 
 //ciao sono Angelica
@@ -54,8 +56,11 @@ public:
       "/navigate_to_pose"   // stesso nome del comando CLI
     );
 
-    // SERVICE CLIENT PER DETECTION TAGS (detect_circles)
+    // SERVICE CLIENT PER DETECTION TAGS (detect_tags)
     detect_apriltag_client_ = this->create_client<DetectApriltagSrv>("/detect_tags");
+
+    // SERVICE CLIENT PER DETECTION CIRCLES (detect_circles)
+    detect_circles_client_ = this->create_client<DetectCirclesSrv>("/detect_circles");
 
     RCLCPP_INFO(this->get_logger(), "localization client init\n");
 
@@ -206,9 +211,6 @@ public:
     goal.pose.pose.position.y = goal_point.y;
     goal.pose.pose.position.z = goal_point.z;
 
-
-    //TO DO: CALCOLARE ANCHE ORIENTATION DA POINT 
-    //Lasciamo il robot dritto quando arriva al goal
     goal.pose.pose.orientation.x = 0.0;
     goal.pose.pose.orientation.y = 0.0;
     goal.pose.pose.orientation.z = 0.7071;
@@ -373,6 +375,57 @@ public:
     return midpoint;
   }
 
+  void call_detect_circles()
+  {
+    auto request = std::make_shared<DetectCirclesSrv::Request>();
+    const std::string target_frame = "odom";
+    request->target_frame = target_frame;
+
+    // Aspetto che il service sia disponibile
+    while (!detect_circles_client_->wait_for_service(1s)) {
+      if (!rclcpp::ok()) {
+        RCLCPP_ERROR(this->get_logger(),"Interrupted while waiting for /detect_circles service. Exiting.");
+        return;
+      }
+
+      RCLCPP_INFO(this->get_logger(),"/detect_circles service not available, waiting again...");
+    }
+
+    RCLCPP_INFO(this->get_logger(),"Calling /detect_circles with target_frame='%s'", target_frame.c_str());
+
+    auto self = this->shared_from_this();
+    auto future = detect_circles_client_->async_send_request(request);
+
+    auto ret = rclcpp::spin_until_future_complete(self, future);
+    if (ret != rclcpp::FutureReturnCode::SUCCESS) {
+      RCLCPP_ERROR(
+        this->get_logger(),
+        "Failed to call /detect_circles (spin_until_future_complete)");
+      return;
+    }
+
+    auto response = future.get();
+    if (!response->success) {
+      RCLCPP_WARN(this->get_logger(), "/detect_circles returned success=false");
+      return;
+    }
+
+    geometry_msgs::msg::PoseArray circles_out = response->circles;
+
+    RCLCPP_INFO(this->get_logger(),"Received %zu circles from /detect_circles",circles_out.poses.size());
+
+    for (size_t i = 0; i < circles_out.poses.size(); ++i) {
+      const auto & pose = circles_out.poses[i];
+      const auto & p = pose.position;
+
+      RCLCPP_INFO(this->get_logger(), "Circle[%zu]: pos = (x=%.3f, y=%.3f, z=%.3f)",i, p.x, p.y, p.z);
+    }
+
+    return;
+  }
+
+
+
 
 private:
   //Class Members
@@ -384,6 +437,7 @@ private:
   geometry_msgs::msg::PoseWithCovarianceStamped last_amcl_pose_;
   rclcpp_action::Client<ActionT>::SharedPtr navigate_action_client_;
   rclcpp::Client<DetectApriltagSrv>::SharedPtr detect_apriltag_client_;
+  rclcpp::Client<DetectCirclesSrv>::SharedPtr detect_circles_client_;
 
   rclcpp::Client<ServiceT>::SharedFuture send_client_request(bool isLocalization)
   {
@@ -439,6 +493,16 @@ int main(int argc, char * argv[])
 
   //STEP 4
   nav_node->send_navigate_goal(goal_point);
+
+  //STEP 5
+  const int circles_reqs = 4;
+
+  for(int i = 1; i <= circles_reqs; i++)
+  {
+    RCLCPP_INFO(nav_node->get_logger(),"Calling /detect_circles number: %d time", i);
+    nav_node->call_detect_circles();
+    rclcpp::sleep_for(1s);
+  }
 
   rclcpp::shutdown();
   return 0;
