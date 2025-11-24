@@ -154,11 +154,11 @@ namespace utils {
 
         for( auto& cls: clusters ){
             int n = cls.points.size();
-            //if(n==0 || cls.type=='l') continue;   // skip pre-rejected lines
+            if(n==0 || cls.type=='l') continue;   // skip pre-rejected lines
 
             cv::Point2f center;                 // placeholders
             float radius=0.f;
-            if( n < 5 )
+            if(n < 5)
                 cv::minEnclosingCircle(cls.points, center, radius); // fallback fit circle
             else{
                 fit_ellipse(cls, center, radius, max_axis_ratio);   // needs 5 points
@@ -247,8 +247,6 @@ namespace utils {
         if( min_points!=0 )
             refine_clusters(clusters, min_points, min_distance);
 
-        // TODO: 5-first hough-based rejection of long lines
-        
         // 6-detect circles
         detect_circles(clusters, max_radius, max_axis_ratio, max_residual);
         return clusters;        
@@ -263,7 +261,7 @@ namespace utils {
      */
     void clusters2image(const std::vector<Cluster>& clusters, cv::Mat& output, int image_size, bool color, float scale) {
 
-        if(clusters.empty() || image_size<=0, scale <=0) return;
+        if(clusters.empty() || image_size<=0 || scale <=0) return;
 
         if(color)
             output = cv::Mat(image_size, image_size, CV_8UC3, cv::Scalar(255, 255, 255));
