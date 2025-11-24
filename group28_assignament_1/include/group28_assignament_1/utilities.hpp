@@ -82,8 +82,8 @@ namespace utils {
      */
     void refine_clusters(std::vector<Cluster>& clusters, const float min_points = 3, const float min_distance = 0.1f);
 
-    /** @brief Performs circle detection by fitting
-     *         a circle with least squares, rejecting data if bad fit
+    /** @brief Performs circle detection by fitting a circle 
+     *         or robust ellipse (>5 points) rejecting data if bad fit
      * @param clusters Input/output vector of clusters
      * @param max_radius Maximum radius to consider a cluster as a circle
      * @param max_residual Maximum residual (MAE) to consider a cluster as a circle
@@ -118,13 +118,14 @@ namespace utils {
                                       float max_axis_ratio=1.2f,
                                       const float max_residual = 0.05f);
 
-    /** @brief Visualizes clusters in a simple OpenCV window
+    /** @brief Converts cluster vector into a colored or binary image
      * @param clusters Input vector of clusters
      * @param output Output image where to draw the clusters
      * @param image_size Size of the output image (image_size x image_size)
+     * @param color boolean indicating whether to give a colored or binary image
      * @param scale Scaling factor to convert from world to image coordinates
      */
-    void visualize_clusters(const std::vector<Cluster>& clusters, cv::Mat& output, int image_size = 800, float scale = 100.0f);
+    void clusters2image(const std::vector<Cluster>& clusters, cv::Mat& output, int image_size = 800, bool color=false, float scale = 100.0f);
 
 }  // namespace utils
 
