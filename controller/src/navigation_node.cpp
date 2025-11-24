@@ -70,8 +70,8 @@ public:
       [this](const sensor_msgs::msg::LaserScan::SharedPtr msg)
       {
         // activate the callback of lidar msgs each time arrive a new scan
-        bool isInCorridor = this->process_lidar_data_callback(msg);
-        RCLCPP_INFO(this->get_logger(), "Is in corridor: %s", isInCorridor ? "true" : "false");
+        this->process_lidar_data_callback(msg);
+        
 
       });
 
@@ -483,27 +483,79 @@ private:
     return result;
   }
 
-
   bool process_lidar_data_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
-  {
+{
+    // Copio le distanze in un vettore di double, come avevi già fatto
     std::vector<double> distances(msg->ranges.begin(), msg->ranges.end());
-    RCLCPP_INFO(this->get_logger(), "PRE Dist. count %d", distances.size());
 
-    const double THRESHOLD = 1.5;
+    const double angle_min       = static_cast<double>(msg->angle_min);
+    const double angle_increment = static_cast<double>(msg->angle_increment);
 
-    
+    // Range di angoli che ti interessa [rad]
+    const double target_angle_min = 3.92;
+    const double target_angle_max = 5.49;
 
-    
-    RCLCPP_INFO(this->get_logger(), "POST Dist count %d", count);
+    double sum_distances = 0.0;
+    std::size_t count    = 0;
 
-    if (count == 0) {
-      return false;
+    for (std::size_t i = 0; i < distances.size(); ++i)
+    {
+        double distance = distances[i];
+
+        // Ignoro valori non finiti (NaN, inf) così non sporcano la media
+        if (!std::isfinite(distance))
+            continue;
+
+        double angle = angle_min + static_cast<double>(i) * angle_increment; // [rad]
+
+        // Considero solo i punti nel range angolare richiesto
+        if (angle >= target_angle_min && angle <= target_angle_max)
+        {
+            sum_distances += distance;
+            ++count;
+        }
     }
 
-    double mean = sum / static_cast<double>(count);
-    RCLCPP_INFO(this->get_logger(), "Avg distance: %d", mean);
-    return (mean < THRESHOLD);
-  }
+    if (count == 0)
+    {
+        RCLCPP_INFO(
+            rclcpp::get_logger("lidar_processor"),
+            "Nessun punto nel range angolare [%.2f, %.2f] rad.",
+            target_angle_min, target_angle_max
+        );
+        return false;
+    }
+
+    double avg_distance = sum_distances / static_cast<double>(count);
+
+    RCLCPP_INFO(
+        rclcpp::get_logger("lidar_processor"),
+        "Distanza media nel range angolare [%.2f, %.2f] rad: %.3f m (su %zu punti)",
+        target_angle_min, target_angle_max, avg_distance, count
+    );
+
+    // Threshold per il corridoio
+    const double threshold = 1.5;
+
+    if (avg_distance < threshold)
+    {
+        RCLCPP_INFO(
+            rclcpp::get_logger("lidar_processor"),
+            "Media %.3f < %.2f -> sei dentro al corridoio",
+            avg_distance, threshold
+        );
+    }
+    else
+    {
+        RCLCPP_INFO(
+            rclcpp::get_logger("lidar_processor"),
+            "Media %.3f >= %.2f -> sei fuori dal corridoio",
+            avg_distance, threshold
+        );
+    }
+
+    return true;
+}
 
 
 
