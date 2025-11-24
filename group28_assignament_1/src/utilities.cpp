@@ -51,7 +51,7 @@ namespace utils {
      * @param threshold Distance threshold to cluster points
      * @return Vector of clusters
      */
-    std::vector<Cluster> cluster_points(const std::vector<cv::Point2f>& points, const float threshold){
+    std::vector<Cluster> cluster_points(const std::vector<cv::Point2f>& points, float threshold){
         if(points.empty()) return {};
 
         // define a predicate to perform distance based clustering
@@ -83,7 +83,7 @@ namespace utils {
      * @param threshold Distance threshold to cluster points
      * @return Vector of clusters
      */
-    std::vector<Cluster> smart_cluster_points(const std::vector<cv::Point2f>& points, const float threshold){
+    std::vector<Cluster> smart_cluster_points(const std::vector<cv::Point2f>& points, float threshold){
         if(points.empty()) return {};
 
         std::vector<Cluster> clusters;
@@ -91,7 +91,7 @@ namespace utils {
         Cluster initial_cluster;
         initial_cluster.points.push_back(points[0]);
         clusters.push_back(initial_cluster);
-        
+
         // points are ordered because of the laser scan range
         // so we only need to check distance with previous point
         for(size_t i = 1; i < points.size(); ++i){
@@ -133,16 +133,49 @@ namespace utils {
      * @param min_points Minimum number of points to consider a valid cluster
      * @param min_distance Minimum distance of centroid from origin
      */
-    void refine_clusters( std::vector<Cluster>& clusters, const float min_points, const float min_distance) {                            
+    void refine_clusters( std::vector<Cluster>& clusters, size_t min_points, float min_distance) {                            
         // remove clusters with less than min_points
         // or those whose centroid is too close
         auto iterator = std::remove_if(clusters.begin(), clusters.end(),
                         [min_points, min_distance](const Cluster& c) {
-                            return c.points.size() < static_cast<size_t>(min_points) || 
-                                cv::norm(c.centroid) < min_distance;
+                            return c.points.size() < min_points || cv::norm(c.centroid) < min_distance;
                         });
         clusters.erase(iterator, clusters.end());
     }
+
+    void discard_lines(std::vector<Cluster>& clusters, size_t min_points){
+        for(auto cls: clusters){
+            if(cls.points.size() > min_points) is_line(cls);
+        }
+    }
+
+    void is_line(Cluster& cls){
+        // first we need to determine a bounding
+        // box containing the whole cluster
+        float minx, maxx, miny, maxy;
+        for (const auto& p : cls.points) {
+            minx = std::min(minx, p.x);
+            maxx = std::max(maxx, p.x);
+            miny = std::min(miny, p.y);
+            maxy = std::max(maxy, p.y);
+        }
+
+        float width = maxx - minx;
+        float height = maxy - miny;
+
+        // build an image for the cluster
+        cv::Mat img;
+        clusters2image({cls}, img, width+10, height+10, false, 100.0f);
+
+        // now do the hough transform to detect lines
+        std::vector<cv::Point2f> lines; 
+        cv::HoughLines(img, lines, 1, CV_PI / 180, 20);
+
+        // if at least one line was found, classify as line
+        if(!lines.empty())
+            cls.type='l';
+    }
+
 
     /** @brief Performs circle detection by fitting a circle 
      *         or robust ellipse (>5 points) rejecting data if bad fit
@@ -150,20 +183,18 @@ namespace utils {
      * @param max_radius Maximum radius to consider a cluster as a circle
      * @param max_residual Maximum residual (MAE) to consider a cluster as a circle
      */
-    void detect_circles(std::vector<Cluster>& clusters, float max_radius, float max_axis_ratio, float max_residual){
+    void detect_circles(std::vector<Cluster>& clusters, float max_radius, float max_residual){
 
         for( auto& cls: clusters ){
             int n = cls.points.size();
-            if(n==0 || cls.type=='l') continue;   // skip pre-rejected lines
+            if(n==0 || cls.type=='l') continue;     // skip pre-rejected lines
 
-            cv::Point2f center;                 // placeholders
+            cv::Point2f center;                     // placeholders
             float radius=0.f;
-            if(n < 5)
+            if(n < 3)
                 cv::minEnclosingCircle(cls.points, center, radius); // fallback fit circle
-            else{
-                fit_ellipse(cls, center, radius, max_axis_ratio);   // needs 5 points
-                if(cls.type == 'l') continue;                       // too elongated ellipse -> line
-            }
+            else
+                algebraic_circle_fit(cls, center, radius);          // needs 5 points
                 
             // we have circle candidates that still need to be verified
             if(radius > max_radius){ cls.type='l'; continue; } // radius too high -> line
@@ -185,31 +216,39 @@ namespace utils {
         }
     }
 
-    /** @brief Fits an ellipse to the cluster points and decides
-     *         whether it can be considered a circle based on axis ratio.
+    /** @brief Fits a circle to the cluster points using Kasa
+     *         algorithm and opencv linear algebra singular value decomposition.
      *  @param cls Input cluster
      *  @param center Output center of the fitted circle
      *  @param radius Output radius of the fitted circle
-     *  @param max_axis_ratio Maximum allowed ratio between major and minor axis
      */
-    void fit_ellipse(Cluster cls, cv::Point2f& center, float& radius, float max_axis_ratio){
-        int n = cls.points.size();
-        if( n < 5 ) return;
-        
-        cv::RotatedRect ellipse = cv::fitEllipse(cls.points);
-        float a = ellipse.size.width / 2.f;
-        float b = ellipse.size.height / 2.f;
+    void algebraic_circle_fit(Cluster& cls, cv::Point2f& center, float& radius) {
+        int n = cls.points.size();        
+        // matrices for the linear system: A * [a, b, c]'T = B
+        // x^2 + y^2 + a*x + b*y + c = 0
+        cv::Mat A(n, 3, CV_64F);
+        cv::Mat B(n, 1, CV_64F);
 
-        // circularity check
-        float axis_ratio = std::max(a, b) / std::min(a, b);
-        if (axis_ratio > max_axis_ratio) {
-            cls.type = 'l';
-            return;
+        for (int i = 0; i < n; i++) {
+            double x = cls.points[i].x;
+            double y = cls.points[i].y;
+            A.at<double>(i, 0) = x;
+            A.at<double>(i, 1) = y;
+            A.at<double>(i, 2) = 1.0;
+            
+            B.at<double>(i, 0) = -(x*x + y*y);
         }
-
-        // supposed to be a circle, still to be verified
-        center = ellipse.center;
-        radius = (a + b) / 2.f;
+        // solve using SVD and cv::solve()
+        cv::Mat X;
+        cv::solve(A, B, X, cv::DECOMP_SVD);
+        // get coefficients
+        double a = X.at<double>(0, 0);
+        double b = X.at<double>(1, 0);
+        double c = X.at<double>(2, 0);
+        // coeff to circle params
+        center.x = -a / 2.0;
+        center.y = -b / 2.0;
+        radius = std::sqrt(a*a/4.0 + b*b/4.0 - c);
     }
 
 
@@ -220,14 +259,12 @@ namespace utils {
      * @param min_points Minimum number of points to consider a valid cluster
      * @param min_distance Minimum distance of centroid from origin
      * @param max_radius Maximum radius to consider a cluster as a circle
-     * @param max_axis_ratio Maximum axis ratio to consider a fitted ellipse as a circle
      * @param max_residual Maximum residual (MAE) to consider a cluster as a
      * @return Vector of processed clusters
      */
-    std::vector<Cluster> process_scan(const sensor_msgs::msg::LaserScan& scan, const bool smart_clustering,
-                                      const float cluster_threshold, const int min_points,
-                                      const float min_distance, const float max_radius, float max_axis_ratio,
-                                      const float max_residual){
+    std::vector<Cluster> process_scan(const sensor_msgs::msg::LaserScan& scan, bool smart_clustering,
+                                      float cluster_threshold, size_t min_points, float min_distance, 
+                                      float max_radius, float max_residual){
         // 1-convert scan to points
         std::vector<cv::Point2f> points;
         lidar2pts(scan, points);
@@ -247,31 +284,36 @@ namespace utils {
         if( min_points!=0 )
             refine_clusters(clusters, min_points, min_distance);
 
+        // 5-discard most lines
+        discard_lines(clusters, 15);
+
         // 6-detect circles
-        detect_circles(clusters, max_radius, max_axis_ratio, max_residual);
+        detect_circles(clusters, max_radius, max_residual);
+
         return clusters;        
     }
 
     /** @brief Converts cluster vector into a colored or binary image
      * @param clusters Input vector of clusters
      * @param output Output image where to draw the clusters
-     * @param image_size Size of the output image (image_size x image_size)
+     * @param sizex Size of the output image x axis (sizex x sizey)
+     * @param sizey Size of the output image y axis (sizex x sizey)
      * @param color boolean indicating whether to give a colored or binary image
      * @param scale Scaling factor to convert from world to image coordinates
      */
-    void clusters2image(const std::vector<Cluster>& clusters, cv::Mat& output, int image_size, bool color, float scale) {
-
-        if(clusters.empty() || image_size<=0 || scale <=0) return;
+    void clusters2image(const std::vector<Cluster>& clusters, cv::Mat& output, int sizex, int sizey, bool color, float scale) {
+        if(clusters.empty() || sizex<=0 || sizey<=0 ||scale <=0) return;
 
         if(color)
-            output = cv::Mat(image_size, image_size, CV_8UC3, cv::Scalar(255, 255, 255));
+            output = cv::Mat(sizex, sizey, CV_8UC3, cv::Scalar(255, 255, 255));
         else
-            output = cv::Mat(image_size, image_size, CV_8UC1, cv::Scalar(0));
+            output = cv::Mat(sizex, sizey, CV_8UC1, cv::Scalar(0));
 
-        cv::Point2f center(image_size / 2.0f, image_size / 2.0f);
+        cv::Point2f center(sizex / 2.0f, sizey / 2.0f);
         cv::RNG rng(12345);
         for (const auto& cls : clusters) {
             if (cls.points.empty()) continue;
+
             // get color randomly for cluster or white if binary image
             cv::Scalar col = color ? cv::Scalar(rng.uniform(0,255), rng.uniform(0,255), rng.uniform(0,255)) :
                                      cv::Scalar(255);
@@ -281,7 +323,7 @@ namespace utils {
                 // Scale and flip y to image coordinates
                 cv::Point pt(static_cast<int>(center.x + p.x * scale),
                             static_cast<int>(center.y - p.y * scale));
-                if (pt.x >= 0 && pt.x < image_size && pt.y >= 0 && pt.y < image_size)
+                if (pt.x >= 0 && pt.x < sizex && pt.y >= 0 && pt.y < sizey)
                     cv::circle(output, pt, 2, col, cv::FILLED);
             }
 

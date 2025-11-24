@@ -65,7 +65,7 @@ namespace utils {
      * @param threshold Distance threshold to cluster points
      * @return Vector of clusters
      */
-    std::vector<Cluster> smart_cluster_points(const std::vector<cv::Point2f>& points, const float threshold=0.05f);
+    std::vector<Cluster> smart_cluster_points(const std::vector<cv::Point2f>& points, float threshold=0.05f);
 
 
     /** @brief Computes centroids using smart matrix operations
@@ -80,7 +80,22 @@ namespace utils {
      * @param min_points Minimum number of points to consider a valid cluster
      * @param min_distance Minimum distance of centroid from origin
      */
-    void refine_clusters(std::vector<Cluster>& clusters, const float min_points = 3, const float min_distance = 0.1f);
+    void refine_clusters(std::vector<Cluster>& clusters, size_t min_points=3, float min_distance=0.1f);
+
+    /** @brief reject clusters with more than min_points, containing lines
+     *         discovered thanks to the hough transform.
+     *  @param clusters a vector of clusters
+     *  @param min_points the minimum number of points to consider as line
+     */
+    void discard_lines(std::vector<Cluster>& clusters, size_t min_points=15);
+
+    /** @brief checks whether a cluster contains lines or not
+     *         using the hough (line) transform.
+     *  @param clusters a vector of clusters
+     *  @param min_points the minimum number of points to consider as line
+     */
+    void is_line(Cluster& cls);
+
 
     /** @brief Performs circle detection by fitting a circle 
      *         or robust ellipse (>5 points) rejecting data if bad fit
@@ -88,16 +103,15 @@ namespace utils {
      * @param max_radius Maximum radius to consider a cluster as a circle
      * @param max_residual Maximum residual (MAE) to consider a cluster as a circle
      */
-    void detect_circles(std::vector<Cluster>& clusters, float max_radius = 1.0f, float max_axis_ratio=1.2, float max_residual = 0.02f);
+    void detect_circles(std::vector<Cluster>& clusters, float max_radius=1.0f, float max_residual=0.02f);
 
-    /** @brief Fits an ellipse to the cluster points and decides
-     *         whether it can be considered a circle based on axis ratio.
+    /** @brief Fits a circle to the cluster points using Kasa
+     *         algorithm and opencv linear algebra singular value decomposition.
      *  @param cls Input cluster
      *  @param center Output center of the fitted circle
      *  @param radius Output radius of the fitted circle
-     *  @param max_axis_ratio Maximum allowed ratio between major and minor axis
      */
-    void fit_ellipse(Cluster cls, cv::Point2f& center, float& radius, float max_axis_ratio=1.2);
+    void algebraic_circle_fit(Cluster& cls, cv::Point2f& center, float& radius);
 
     /** @brief Chains the pipeline together
      *         to fully process a single scan
@@ -110,13 +124,12 @@ namespace utils {
      * @return Vector of processed clusters
      */
     std::vector<Cluster> process_scan(const sensor_msgs::msg::LaserScan& scan,
-                                      const bool smart_clustering = false,
-                                      const float cluster_threshold = 0.3f,
-                                      const int min_points = 3,
-                                      const float min_distance = 0.1f,
-                                      const float max_radius = 1.0f,
-                                      float max_axis_ratio=1.2f,
-                                      const float max_residual = 0.05f);
+                                      bool smart_clustering=false,
+                                      float cluster_threshold=0.3f,
+                                      size_t min_points=3,
+                                      float min_distance=0.1f,
+                                      float max_radius=1.0f,
+                                      float max_residual=0.05f);
 
     /** @brief Converts cluster vector into a colored or binary image
      * @param clusters Input vector of clusters
@@ -125,7 +138,7 @@ namespace utils {
      * @param color boolean indicating whether to give a colored or binary image
      * @param scale Scaling factor to convert from world to image coordinates
      */
-    void clusters2image(const std::vector<Cluster>& clusters, cv::Mat& output, int image_size = 800, bool color=false, float scale = 100.0f);
+    void clusters2image(const std::vector<Cluster>& clusters, cv::Mat& output, int sizex=800, int sizey=800, bool color=false, float scale=100.0f);
 
 }  // namespace utils
 
