@@ -16,6 +16,7 @@
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
+#include "sensor_msgs/msg/laser_scan.hpp"
 
 using namespace std::chrono_literals;
 using ServiceT = nav2_msgs::srv::ManageLifecycleNodes;
@@ -41,26 +42,38 @@ class NavigationNode : public rclcpp::Node
 public:
   NavigationNode() : Node("navigation_node")
   {
-    // SERVICE CLIENT PER ATTIVARE LOCALIZATION
-    localization_client = this->create_client<nav2_msgs::srv::ManageLifecycleNodes>("/lifecycle_manager_localization/manage_nodes");
+    // // SERVICE CLIENT PER ATTIVARE LOCALIZATION
+    // localization_client = this->create_client<nav2_msgs::srv::ManageLifecycleNodes>("/lifecycle_manager_localization/manage_nodes");
     
-    // PUBLISH DELLA POSIZIONE INIZIALE
-    initialpose_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/initialpose", 10);
+    // // PUBLISH DELLA POSIZIONE INIZIALE
+    // initialpose_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/initialpose", 10);
 
-    // SERVICE CLIENT PER ATTIVARE NAVIGATION
-    navigation_client = this->create_client<nav2_msgs::srv::ManageLifecycleNodes>("/lifecycle_manager_navigation/manage_nodes");
+    // // SERVICE CLIENT PER ATTIVARE NAVIGATION
+    // navigation_client = this->create_client<nav2_msgs::srv::ManageLifecycleNodes>("/lifecycle_manager_navigation/manage_nodes");
     
-    // ACTION CLIENT PER FAR PARTIRE NAVIGATION
-    navigate_action_client_ = rclcpp_action::create_client<ActionT>(
-      this,
-      "/navigate_to_pose"   // stesso nome del comando CLI
-    );
+    // // ACTION CLIENT PER FAR PARTIRE NAVIGATION
+    // navigate_action_client_ = rclcpp_action::create_client<ActionT>(
+    //   this,
+    //   "/navigate_to_pose"   // stesso nome del comando CLI
+    // );
 
-    // SERVICE CLIENT PER DETECTION TAGS (detect_tags)
-    detect_apriltag_client_ = this->create_client<DetectApriltagSrv>("/detect_tags");
+    // // SERVICE CLIENT PER DETECTION TAGS (detect_tags)
+    // detect_apriltag_client_ = this->create_client<DetectApriltagSrv>("/detect_tags");
 
-    // SERVICE CLIENT PER DETECTION CIRCLES (detect_circles)
-    detect_circles_client_ = this->create_client<DetectCirclesSrv>("/detect_circles");
+    // // SERVICE CLIENT PER DETECTION CIRCLES (detect_circles)
+    // detect_circles_client_ = this->create_client<DetectCirclesSrv>("/detect_circles");
+
+    // LIDAR SUBSCRIBER PER PUNTI EXTRA
+    lidar_sensor_subscriber = this->create_subscription<sensor_msgs::msg::LaserScan>(
+      "/scan", //lidar topic
+      10,     
+      [this](const sensor_msgs::msg::LaserScan::SharedPtr msg)
+      {
+        // activate the callback of lidar msgs each time arrive a new scan
+        bool isInCorridor = this->process_lidar_data_callback(msg);
+        RCLCPP_INFO(this->get_logger(), "Is in corridor: %s", isInCorridor ? "true" : "false");
+
+      });
 
     RCLCPP_INFO(this->get_logger(), "localization client init\n");
 
@@ -438,7 +451,9 @@ private:
   rclcpp_action::Client<ActionT>::SharedPtr navigate_action_client_;
   rclcpp::Client<DetectApriltagSrv>::SharedPtr detect_apriltag_client_;
   rclcpp::Client<DetectCirclesSrv>::SharedPtr detect_circles_client_;
+  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_sensor_subscriber;
 
+  //gestione richieste 
   rclcpp::Client<ServiceT>::SharedFuture send_client_request(bool isLocalization)
   {
     auto request = std::make_shared<ServiceT::Request>();
@@ -467,6 +482,31 @@ private:
     auto result = client->async_send_request(request);
     return result;
   }
+
+
+  bool process_lidar_data_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
+  {
+    std::vector<double> distances(msg->ranges.begin(), msg->ranges.end());
+    RCLCPP_INFO(this->get_logger(), "PRE Dist. count %d", distances.size());
+
+    const double THRESHOLD = 1.5;
+
+    
+
+    
+    RCLCPP_INFO(this->get_logger(), "POST Dist count %d", count);
+
+    if (count == 0) {
+      return false;
+    }
+
+    double mean = sum / static_cast<double>(count);
+    RCLCPP_INFO(this->get_logger(), "Avg distance: %d", mean);
+    return (mean < THRESHOLD);
+  }
+
+
+
 };
 
 int main(int argc, char * argv[])
@@ -474,35 +514,38 @@ int main(int argc, char * argv[])
   rclcpp::init(argc, argv);
   std::shared_ptr<NavigationNode> nav_node = std::make_shared<NavigationNode>();
   
-  // STEP 0
-  geometry_msgs::msg::Point goal_point = nav_node->call_detect_apriltags();
+  //NOTE: DA TOGLIERE, USATO SOLO PER PROVE
+  rclcpp::spin(nav_node);
+  
+  // // STEP 0
+  // geometry_msgs::msg::Point goal_point = nav_node->call_detect_apriltags();
 
-  //STEP 1
-  auto result_localization = nav_node->send_localization_request();
-  nav_node->handle_result(result_localization, "/lifecycle_manager_localization/manage_nodes");
+  // //STEP 1
+  // auto result_localization = nav_node->send_localization_request();
+  // nav_node->handle_result(result_localization, "/lifecycle_manager_localization/manage_nodes");
 
-  //STEP 2
-  nav_node->publish_initial_pose();
+  // //STEP 2
+  // nav_node->publish_initial_pose();
 
-   //STEP 2.5 - la posa è stata recepità ?
-  nav_node->wait_for_amcl_pose();
+  //  //STEP 2.5 - la posa è stata recepità ?
+  // nav_node->wait_for_amcl_pose();
 
-  //STEP 3
-  auto result_nav = nav_node->send_navigation_request();
-  nav_node->handle_result(result_nav, "/lifecycle_manager_navigation/manage_nodes");
+  // //STEP 3
+  // auto result_nav = nav_node->send_navigation_request();
+  // nav_node->handle_result(result_nav, "/lifecycle_manager_navigation/manage_nodes");
 
-  //STEP 4
-  nav_node->send_navigate_goal(goal_point);
+  // //STEP 4
+  // nav_node->send_navigate_goal(goal_point);
 
-  //STEP 5
-  const int circles_reqs = 4;
+  // //STEP 5
+  // const int circles_reqs = 4;
 
-  for(int i = 1; i <= circles_reqs; i++)
-  {
-    RCLCPP_INFO(nav_node->get_logger(),"Calling /detect_circles number: %d time", i);
-    nav_node->call_detect_circles();
-    rclcpp::sleep_for(1s);
-  }
+  // for(int i = 1; i <= circles_reqs; i++)
+  // {
+  //   RCLCPP_INFO(nav_node->get_logger(),"Calling /detect_circles number: %d time", i);
+  //   nav_node->call_detect_circles();
+  //   rclcpp::sleep_for(1s);
+  // }
 
   rclcpp::shutdown();
   return 0;
