@@ -17,6 +17,7 @@
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "sensor_msgs/msg/laser_scan.hpp"
+#include "geometry_msgs/msg/twist.hpp"
 
 using namespace std::chrono_literals;
 using ServiceT = nav2_msgs::srv::ManageLifecycleNodes;
@@ -26,15 +27,19 @@ using DetectApriltagSrv = group28_assignament_1::srv::DetectTags;
 using DetectCirclesSrv = group28_assignament_1::srv::DetectCircles;
 using TagDetectionMsg  = group28_assignament_1::msg::TagDetection;
 
-//ciao sono Angelica
+// enum class InitSteps {
+//     START,
+//     GET_GOAL_FROM_SERVER,      // Ottenere la posizione goal da /goal_pose
+//     ACTIVATE_LOCALIZATION,     // Richiamare il service di attivazione della localization
+//     INIT_START_POSITION,       // Inizializzare la posizione iniziale
+//     ACTIVATE_NAVIGATION,       // Richiamare il service di attivazione della navigation
+//     SEND_GOAL_ACTION           // Inviare il goal tramite action NavigateToPose
+// };
 
 enum class InitSteps {
-    START,
-    GET_GOAL_FROM_SERVER,      // Ottenere la posizione goal da /goal_pose
-    ACTIVATE_LOCALIZATION,     // Richiamare il service di attivazione della localization
-    INIT_START_POSITION,       // Inizializzare la posizione iniziale
-    ACTIVATE_NAVIGATION,       // Richiamare il service di attivazione della navigation
-    SEND_GOAL_ACTION           // Inviare il goal tramite action NavigateToPose
+    START_NAV, //Da start a corridorio
+    MANUAL_NAV, //Da corridoio a fine corridoio
+    RESUME_NAV //Da fine corridoio a destinazione
 };
 
 class NavigationNode : public rclcpp::Node
@@ -42,26 +47,26 @@ class NavigationNode : public rclcpp::Node
 public:
   NavigationNode() : Node("navigation_node")
   {
-    // // SERVICE CLIENT PER ATTIVARE LOCALIZATION
-    // localization_client = this->create_client<nav2_msgs::srv::ManageLifecycleNodes>("/lifecycle_manager_localization/manage_nodes");
+    // SERVICE CLIENT PER ATTIVARE LOCALIZATION
+    localization_client = this->create_client<nav2_msgs::srv::ManageLifecycleNodes>("/lifecycle_manager_localization/manage_nodes");
     
-    // // PUBLISH DELLA POSIZIONE INIZIALE
-    // initialpose_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/initialpose", 10);
+    // PUBLISH DELLA POSIZIONE INIZIALE
+    initialpose_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/initialpose", 10);
 
-    // // SERVICE CLIENT PER ATTIVARE NAVIGATION
-    // navigation_client = this->create_client<nav2_msgs::srv::ManageLifecycleNodes>("/lifecycle_manager_navigation/manage_nodes");
+    // SERVICE CLIENT PER ATTIVARE NAVIGATION
+    navigation_client = this->create_client<nav2_msgs::srv::ManageLifecycleNodes>("/lifecycle_manager_navigation/manage_nodes");
     
-    // // ACTION CLIENT PER FAR PARTIRE NAVIGATION
-    // navigate_action_client_ = rclcpp_action::create_client<ActionT>(
-    //   this,
-    //   "/navigate_to_pose"   // stesso nome del comando CLI
-    // );
+    // ACTION CLIENT PER FAR PARTIRE NAVIGATION
+    navigate_action_client_ = rclcpp_action::create_client<ActionT>(
+      this,
+      "/navigate_to_pose"   // stesso nome del comando CLI
+    );
 
-    // // SERVICE CLIENT PER DETECTION TAGS (detect_tags)
-    // detect_apriltag_client_ = this->create_client<DetectApriltagSrv>("/detect_tags");
+    // SERVICE CLIENT PER DETECTION TAGS (detect_tags)
+    detect_apriltag_client_ = this->create_client<DetectApriltagSrv>("/detect_tags");
 
-    // // SERVICE CLIENT PER DETECTION CIRCLES (detect_circles)
-    // detect_circles_client_ = this->create_client<DetectCirclesSrv>("/detect_circles");
+    // SERVICE CLIENT PER DETECTION CIRCLES (detect_circles)
+    detect_circles_client_ = this->create_client<DetectCirclesSrv>("/detect_circles");
 
     // LIDAR SUBSCRIBER PER PUNTI EXTRA
     lidar_sensor_subscriber = this->create_subscription<sensor_msgs::msg::LaserScan>(
@@ -74,6 +79,8 @@ public:
         
 
       });
+
+    publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
 
     RCLCPP_INFO(this->get_logger(), "localization client init\n");
 
@@ -253,7 +260,7 @@ public:
       };
 
     options.feedback_callback =
-      [this](GoalHandleActionT::SharedPtr,
+      [this](GoalHandleActionT::SharedPtr goal_handle,
             const std::shared_ptr<const ActionT::Feedback> feedback)
       {
         RCLCPP_INFO(
@@ -261,6 +268,16 @@ public:
           "NavigateToPose feedback: distance_remaining=%.2f",
           feedback->distance_remaining
         );
+
+        if (isInCorridor)
+        {
+          RCLCPP_WARN(
+            this->get_logger(),
+            "IsInCorridor == true, annullo la navigazione corrente");
+
+          navigate_action_client_->async_cancel_goal(goal_handle);
+          
+        }
       };
 
     auto self = this->shared_from_this();
@@ -437,8 +454,24 @@ public:
     return;
   }
 
+  void manual_nav()
+  {
+      geometry_msgs::msg::Twist msg;
+      msg.linear.x = 1;
+      publisher_->publish(msg);
+  }
 
+  void manual_stop()
+  {
+    geometry_msgs::msg::Twist msg;
+    msg.linear.x = 0;
+    publisher_->publish(msg);
+  }
 
+  bool getIsInCorridor()
+  {
+    return isInCorridor;
+  }
 
 private:
   //Class Members
@@ -451,7 +484,15 @@ private:
   rclcpp_action::Client<ActionT>::SharedPtr navigate_action_client_;
   rclcpp::Client<DetectApriltagSrv>::SharedPtr detect_apriltag_client_;
   rclcpp::Client<DetectCirclesSrv>::SharedPtr detect_circles_client_;
+  
+  //Subscriber lidar
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr lidar_sensor_subscriber;
+  
+  //Publisher manual navigation
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher_;
+  rclcpp::TimerBase::SharedPtr timer_;
+
+  bool isInCorridor = false;
 
   //gestione richieste 
   rclcpp::Client<ServiceT>::SharedFuture send_client_request(bool isLocalization)
@@ -484,81 +525,70 @@ private:
   }
 
   bool process_lidar_data_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
-{
-    // Copio le distanze in un vettore di double, come avevi già fatto
-    std::vector<double> distances(msg->ranges.begin(), msg->ranges.end());
+  {
+      // Copio le distanze in un vettore di double, come avevi già fatto
+      std::vector<double> distances(msg->ranges.begin(), msg->ranges.end());
 
-    const double angle_min       = static_cast<double>(msg->angle_min);
-    const double angle_increment = static_cast<double>(msg->angle_increment);
+      const double angle_min       = static_cast<double>(msg->angle_min);
+      const double angle_increment = static_cast<double>(msg->angle_increment);
 
-    // Range di angoli che ti interessa [rad]
-    //Seleziono solo l'angolatura destra
-    const double target_angle_min = 3.92; //5/4 pigreco
-    const double target_angle_max = 5.49; //7/4 pigreco
+      // Range di angoli che ti interessa [rad]
+      //Seleziono solo l'angolatura destra
+      const double target_angle_min = 3.92; //5/4 pigreco
+      const double target_angle_max = 5.49; //7/4 pigreco
 
-    double sum_distances = 0.0;
-    std::size_t count    = 0;
+      double sum_distances = 0.0;
+      std::size_t count    = 0;
 
-    for (std::size_t i = 0; i < distances.size(); ++i)
-    {
-        double distance = distances[i];
+      for (std::size_t i = 0; i < distances.size(); ++i)
+      {
+          double distance = distances[i];
 
-        // Ignoro valori non finiti (NaN, inf) così non sporcano la media
-        if (!std::isfinite(distance))
-            continue;
+          // Ignoro valori non finiti (NaN, inf) così non sporcano la media
+          if (!std::isfinite(distance))
+              continue;
 
-        double angle = angle_min + static_cast<double>(i) * angle_increment; // [rad]
+          double angle = angle_min + static_cast<double>(i) * angle_increment; // [rad]
 
-        // Considero solo i punti nel range angolare richiesto
-        if (angle >= target_angle_min && angle <= target_angle_max)
-        {
-            sum_distances += distance;
-            ++count;
-        }
-    }
+          // Considero solo i punti nel range angolare richiesto
+          if (angle >= target_angle_min && angle <= target_angle_max)
+          {
+              sum_distances += distance;
+              ++count;
+          }
+      }
 
-    if (count == 0)
-    {
-        RCLCPP_INFO(
-            rclcpp::get_logger("lidar_processor"),
-            "Nessun punto nel range angolare [%.2f, %.2f] rad.",
-            target_angle_min, target_angle_max
-        );
-        return false;
-    }
+      if (count == 0)
+      {
+          // RCLCPP_INFO(
+          //     rclcpp::get_logger("lidar_processor"),
+          //     "Nessun punto nel range angolare [%.2f, %.2f] rad.",
+          //     target_angle_min, target_angle_max
+          // );
+          return false;
+      }
 
-    double avg_distance = sum_distances / static_cast<double>(count);
+      double avg_distance = sum_distances / static_cast<double>(count);
 
-    RCLCPP_INFO(
-        rclcpp::get_logger("lidar_processor"),
-        "Distanza media nel range angolare [%.2f, %.2f] rad: %.3f m (su %zu punti)",
-        target_angle_min, target_angle_max, avg_distance, count
-    );
+      // RCLCPP_INFO(
+      //     rclcpp::get_logger("lidar_processor"),
+      //     "Distanza media nel range angolare [%.2f, %.2f] rad: %.3f m (su %zu punti)",
+      //     target_angle_min, target_angle_max, avg_distance, count
+      // );
 
-    // Threshold per il corridoio
-    const double threshold = 1.5;
+      // Threshold per il corridoio
+      const double threshold = 1.5;
+      isInCorridor = avg_distance < threshold;
+      RCLCPP_INFO(this->get_logger(),"IsInCorridor = %s", isInCorridor ? "true" : "false");
 
-    if (avg_distance < threshold)
-    {
-        RCLCPP_INFO(
-            rclcpp::get_logger("lidar_processor"),
-            "Media %.3f < %.2f -> sei dentro al corridoio",
-            avg_distance, threshold
-        );
-    }
-    else
-    {
-        RCLCPP_INFO(
-            rclcpp::get_logger("lidar_processor"),
-            "Media %.3f >= %.2f -> sei fuori dal corridoio",
-            avg_distance, threshold
-        );
-    }
+      // if (isInCorridor)
+      //     RCLCPP_INFO( rclcpp::get_logger("lidar_processor"), "Media %.3f < %.2f -> sei dentro al corridoio", avg_distance, threshold);
+      // else
+      //     RCLCPP_INFO(rclcpp::get_logger("lidar_processor"),"Media %.3f >= %.2f -> sei fuori dal corridoio", avg_distance, threshold);
+      
 
-    return true;
-}
-
-
+      return true;
+  }
 
 };
 
@@ -567,38 +597,58 @@ int main(int argc, char * argv[])
   rclcpp::init(argc, argv);
   std::shared_ptr<NavigationNode> nav_node = std::make_shared<NavigationNode>();
   
-  //NOTE: DA TOGLIERE, USATO SOLO PER PROVE
-  rclcpp::spin(nav_node);
+  //rclcpp::spin(nav_node);
   
-  // // STEP 0
-  // geometry_msgs::msg::Point goal_point = nav_node->call_detect_apriltags();
+  // STEP 0
+  geometry_msgs::msg::Point goal_point = nav_node->call_detect_apriltags();
 
-  // //STEP 1
-  // auto result_localization = nav_node->send_localization_request();
-  // nav_node->handle_result(result_localization, "/lifecycle_manager_localization/manage_nodes");
+  //STEP 1
+  auto result_localization = nav_node->send_localization_request();
+  nav_node->handle_result(result_localization, "/lifecycle_manager_localization/manage_nodes");
 
-  // //STEP 2
-  // nav_node->publish_initial_pose();
+  //STEP 2
+  nav_node->publish_initial_pose();
 
-  //  //STEP 2.5 - la posa è stata recepità ?
-  // nav_node->wait_for_amcl_pose();
+   //STEP 2.5 - la posa è stata recepità ?
+  nav_node->wait_for_amcl_pose();
 
-  // //STEP 3
-  // auto result_nav = nav_node->send_navigation_request();
-  // nav_node->handle_result(result_nav, "/lifecycle_manager_navigation/manage_nodes");
+  //STEP 3
+  auto result_nav = nav_node->send_navigation_request();
+  nav_node->handle_result(result_nav, "/lifecycle_manager_navigation/manage_nodes");
 
-  // //STEP 4
-  // nav_node->send_navigate_goal(goal_point);
+  //STEP 4
+  nav_node->send_navigate_goal(goal_point);
 
-  // //STEP 5
-  // const int circles_reqs = 4;
+  rclcpp::sleep_for(3s);
+  RCLCPP_INFO(nav_node->get_logger(),"Init manual Nav");
 
-  // for(int i = 1; i <= circles_reqs; i++)
-  // {
-  //   RCLCPP_INFO(nav_node->get_logger(),"Calling /detect_circles number: %d time", i);
-  //   nav_node->call_detect_circles();
-  //   rclcpp::sleep_for(1s);
-  // }
+  while (rclcpp::ok() && nav_node->getIsInCorridor())
+  {
+    // Processa i callback: lidar, ecc.
+    rclcpp::spin_some(nav_node);
+
+    nav_node->manual_nav();
+    rclcpp::sleep_for(150ms);
+
+    RCLCPP_INFO(
+      nav_node->get_logger(),
+      "IsInCorridor = %s",
+      nav_node->getIsInCorridor() ? "true" : "false"
+    );
+  }
+
+  nav_node->manual_stop();
+  rclcpp::sleep_for(5s);
+
+  //STEP 5
+  const int circles_reqs = 4;
+
+  for(int i = 1; i <= circles_reqs; i++)
+  {
+    RCLCPP_INFO(nav_node->get_logger(),"Calling /detect_circles number: %d time", i);
+    nav_node->call_detect_circles();
+    rclcpp::sleep_for(1s);
+  }
 
   rclcpp::shutdown();
   return 0;
