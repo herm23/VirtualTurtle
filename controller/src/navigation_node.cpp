@@ -498,6 +498,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
 
   bool isInCorridor = false;
+  bool isRotating = false;
 
   //gestione richieste 
   rclcpp::Client<ServiceT>::SharedFuture send_client_request(bool isLocalization)
@@ -584,7 +585,12 @@ private:
       // Threshold per il corridoio
       const double threshold = 1.5;
       isInCorridor = avg_distance < threshold;
-      RCLCPP_INFO(this->get_logger(),"IsInCorridor = %s", isInCorridor ? "true" : "false");
+      RCLCPP_INFO(this->get_logger(),"(Avg dist: %f m)  IsInCorridor = %s", avg_distance, isInCorridor ? "true" : "false");
+
+      const double tooclose_thresh = 0.4;
+
+      if(avg_distance < tooclose_thresh && !isRotating)
+        rotate_robot(0.1, 1.0);
 
       // if (isInCorridor)
       //     RCLCPP_INFO( rclcpp::get_logger("lidar_processor"), "Media %.3f < %.2f -> sei dentro al corridoio", avg_distance, threshold);
@@ -593,6 +599,26 @@ private:
       
 
       return true;
+  }
+
+  void rotate_robot(double angular_speed, double duration_sec)
+  {
+    isRotating = true;
+    geometry_msgs::msg::Twist twist;
+    twist.linear.x = 0.0;
+    twist.angular.z = angular_speed;   // positivo = antiorario
+
+    rclcpp::Rate rate(30);
+    auto start = this->now();
+
+    while (rclcpp::ok() && (this->now() - start).seconds() < duration_sec) {
+        publisher_->publish(twist);
+        rate.sleep();
+    }
+
+    // Stop a fine rotazione
+    twist.angular.z = 0.0;
+    publisher_->publish(twist);
   }
 
 };
