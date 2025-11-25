@@ -473,6 +473,11 @@ public:
     return isInCorridor;
   }
 
+  geometry_msgs::msg::PoseWithCovarianceStamped getLastPose()
+  {
+    return last_amcl_pose_;
+  }
+
 private:
   //Class Members
   rclcpp::Client<nav2_msgs::srv::ManageLifecycleNodes>::SharedPtr localization_client;
@@ -630,25 +635,35 @@ int main(int argc, char * argv[])
     nav_node->manual_nav();
     rclcpp::sleep_for(150ms);
 
-    RCLCPP_INFO(
-      nav_node->get_logger(),
-      "IsInCorridor = %s",
-      nav_node->getIsInCorridor() ? "true" : "false"
-    );
+    RCLCPP_INFO(nav_node->get_logger(), "IsInCorridor = %s", nav_node->getIsInCorridor() ? "true" : "false");
   }
 
   nav_node->manual_stop();
   rclcpp::sleep_for(5s);
+  rclcpp::spin_some(nav_node);
 
+  RCLCPP_INFO(nav_node->get_logger(),"Prima di chiamata posizione !!!");
+  
+
+  RCLCPP_INFO(
+            nav_node->get_logger(),
+            "Received /amcl_pose: x=%.3f, y=%.3f (frame_id=%s)",
+            nav_node->getLastPose().pose.pose.position.x,
+            nav_node->getLastPose().pose.pose.position.y,
+            nav_node->getLastPose().header.frame_id.c_str()
+          );
+
+          
+  nav_node->send_navigate_goal(goal_point);
   //STEP 5
-  const int circles_reqs = 4;
+  // const int circles_reqs = 4;
 
-  for(int i = 1; i <= circles_reqs; i++)
-  {
-    RCLCPP_INFO(nav_node->get_logger(),"Calling /detect_circles number: %d time", i);
-    nav_node->call_detect_circles();
-    rclcpp::sleep_for(1s);
-  }
+  // for(int i = 1; i <= circles_reqs; i++)
+  // {
+  //   RCLCPP_INFO(nav_node->get_logger(),"Calling /detect_circles number: %d time", i);
+  //   nav_node->call_detect_circles();
+  //   rclcpp::sleep_for(1s);
+  // }
 
   rclcpp::shutdown();
   return 0;
