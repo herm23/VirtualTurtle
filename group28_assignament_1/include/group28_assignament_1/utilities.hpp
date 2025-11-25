@@ -12,6 +12,22 @@
 
 namespace utils {
 
+    /*************/
+    /* CONSTANTS */
+    /*************/
+
+    // standard image size in x, y and scale (pixels per meter)
+    constexpr int SIZE_X = 800;
+    constexpr int SIZE_Y = 800;
+    constexpr float SCALE = 100.0f;
+
+    // tolerances
+    constexpr float TOL = 1e-6f;
+    constexpr float REJECT_THRESH = 4.0f;
+
+    // standard hough settings
+    constexpr int MIN_HOUGH_VOTES = 15;
+
     /**********/
     /* BASICS */
     /**********/
@@ -131,6 +147,10 @@ namespace utils {
                                       float max_radius=1.0f,
                                       float max_residual=0.05f);
 
+
+
+    /* HELPER FUNCTIONS */
+
     /** @brief Converts cluster vector into a colored or binary image
      * @param clusters Input vector of clusters
      * @param output Output image where to draw the clusters
@@ -138,7 +158,15 @@ namespace utils {
      * @param color boolean indicating whether to give a colored or binary image
      * @param scale Scaling factor to convert from world to image coordinates
      */
-    void clusters2image(const std::vector<Cluster>& clusters, cv::Mat& output, int sizex=800, int sizey=800, bool color=false, float scale=100.0f);
+    void clusters2image(const std::vector<Cluster>& clusters, cv::Mat& output, int sizex=SIZE_X, int sizey=SIZE_Y, bool color=false, float scale=SCALE);
+
+    /** @brief quickly rasterizes the cluster into a binary image
+     *  @param cls constant input cluster reference
+     *  @param img output binary image reference
+     *  @param bbox constant bounding box enclosing the cluster
+     *  @param scale pixel density per meter
+     */
+    void rasterize_cluster(const Cluster& cls, cv::Mat& img, const cv::Rect& bbox, int scale=SCALE);
 
 }  // namespace utils
 

@@ -1,4 +1,5 @@
 #include "group28_assignament_1/utilities.hpp"
+#include <iostream>
 
 namespace utils {
 
@@ -144,36 +145,40 @@ namespace utils {
     }
 
     void discard_lines(std::vector<Cluster>& clusters, size_t min_points){
-        for(auto cls: clusters){
+        for(auto& cls: clusters){
             if(cls.points.size() > min_points) is_line(cls);
         }
     }
 
     void is_line(Cluster& cls){
-        // first we need to determine a bounding
-        // box containing the whole cluster
-        float minx, maxx, miny, maxy;
-        for (const auto& p : cls.points) {
-            minx = std::min(minx, p.x);
-            maxx = std::max(maxx, p.x);
-            miny = std::min(miny, p.y);
-            maxy = std::max(maxy, p.y);
+
+        // determine cluster bounding box (width, height)
+        cv::Rect2f bbox = cv::boundingRect(cls.points);
+
+        // conditions for a cluster to be immediately classified as line
+        // 1. very high aspect ratio (likely a pure line)
+        // 2. more than 4 meters away (unreliable data)
+        float aspect_ratio = std::max(bbox.width, bbox.height) / (std::min(bbox.width, bbox.height) + TOL);
+        if(aspect_ratio> REJECT_THRESH || cv::norm(cls.centroid)>REJECT_THRESH) {
+            std::cout << "RATIO/DISTANCE FAILED" << cls.centroid.x << ", " << cls.centroid.y << std::endl; 
+            cls.type = 'l';
+            return;
         }
 
-        float width = maxx - minx;
-        float height = maxy - miny;
-
-        // build an image for the cluster
+        // rasterize the cluster into a binary image
         cv::Mat img;
-        clusters2image({cls}, img, width+10, height+10, false, 100.0f);
+        rasterize_cluster(cls, img, bbox, SCALE);
 
         // now do the hough transform to detect lines
-        std::vector<cv::Point2f> lines; 
-        cv::HoughLines(img, lines, 1, CV_PI / 180, 20);
+        std::vector<cv::Vec2f> lines; 
+        cv::HoughLines(img, lines, 1, CV_PI / 180, 10);
 
         // if at least one line was found, classify as line
-        if(!lines.empty())
+        if(!lines.empty()){
             cls.type='l';
+            std::cout<< "HOUGH LINE" << std::endl;
+        }
+            
     }
 
 
@@ -189,27 +194,47 @@ namespace utils {
             int n = cls.points.size();
             if(n==0 || cls.type=='l') continue;     // skip pre-rejected lines
 
-            cv::Point2f center;                     // placeholders
+            // circle candidates to be assessed
+            cv::Point2f center;
             float radius=0.f;
             if(n < 3)
                 cv::minEnclosingCircle(cls.points, center, radius); // fallback fit circle
             else
-                algebraic_circle_fit(cls, center, radius);          // needs 5 points
+                algebraic_circle_fit(cls, center, radius);          // needs 5 points to be reliable
                 
-            // we have circle candidates that still need to be verified
-            if(radius > max_radius){ cls.type='l'; continue; } // radius too high -> line
+            // to be classified as circle they must satisfy:
+            // 1. radius lower than max_radius (possible to fit a large circle to a line)
+            if(radius > max_radius){
+                std::cout << "CANDIDATE" << center.x << " " << center.y  << "MAX RADIUS" << std::endl;
+                cls.type='l'; 
+                continue; 
+            } 
 
+            // 2. low enough MAE (correct fit of points to cicle)
             // compute residual (MAE)
             float mae = 0.0f;
             for (const auto& p : cls.points)
                 mae += std::abs(cv::norm(p - center) - radius);
 
             mae /= cls.points.size();
-
             // bad fit --> line
-            if (mae > max_residual) { cls.type = 'l'; continue; }
-
+            if (mae > max_residual) { 
+                std::cout << "CANDIDATE" << center.x << " " << center.y  << "MSE" << std::endl;
+                cls.type = 'l'; 
+                continue; 
+            }
             // good fit --> circle
+
+            // 4. the center needs to be close enough
+            // because the lidar spacing may produce lines sparse enough
+            // to be fit to circles
+            // so we perform one last aspect ratio test
+            if( cv::norm(center) > 4.0f){
+                std::cout << "CANDIDATE" << center.x << " " << center.y  << "FAR" << std::endl;
+                cls.type = 'l';
+                continue;
+            }
+
             cls.centroid = center;
             cls.radius = radius;
             cls.type = 'c';
@@ -285,7 +310,7 @@ namespace utils {
             refine_clusters(clusters, min_points, min_distance);
 
         // 5-discard most lines
-        discard_lines(clusters, 15);
+        discard_lines(clusters, MIN_HOUGH_VOTES);
 
         // 6-detect circles
         detect_circles(clusters, max_radius, max_residual);
@@ -341,5 +366,28 @@ namespace utils {
      *  cv::imshow("clusters", image);
      *  cv::waitKey(1);
      */
+
+
+    void rasterize_cluster(const Cluster& cls, cv::Mat& img, const cv::Rect& bbox, int scale){
+        if(cls.points.empty() || scale<0 ) return;
+
+        // compute dimensions, ensure at least 50x50
+        int img_width = static_cast<int>((bbox.width * scale)) + 20;
+        int img_height = static_cast<int>((bbox.height * scale)) + 20;
+        img_width = std::max(img_width, 50);
+        img_height = std::max(img_height, 50);
+
+        img = cv::Mat(img_width, img_height, CV_8UC1, cv::Scalar(0));
+        for (const auto& p : cls.points) {
+            // coordinate change
+            int px = static_cast<int>((p.x - bbox.x) * scale) + 10;
+            int py = static_cast<int>((p.y - bbox.y) * scale) + 10;
+            // check bounds and draw circle
+            if (px >= 0 && px < img_width && py >= 0 && py < img_height) {
+                cv::circle(img, cv::Point(px, py), 2, cv::Scalar(255), cv::FILLED);
+            }
+        }
+    }
+
 
 } // namespace
