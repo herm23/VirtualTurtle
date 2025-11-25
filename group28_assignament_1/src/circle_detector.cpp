@@ -15,17 +15,28 @@ namespace detection{
      * LaserScan::SharedPtr last_scan_;                                                     // latest scan
      * bool scan_received_;                                                                 // flag for scan reception
      * std::mutex scan_mutex_;                                                              // thread synchronization
-     * std::condition_variable scan_cv_;
-     * int wait_timeout;                                 
+     * std::condition_variable scan_cv_;                          
      * std::unique_ptr<tf2_ros::Buffer> tf_buffer_;                                         // transformations
      * std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+     * 
+     * // parameters gotten
+     *  int wait_timeout;;
+     *  std::string scan_topic;
+     *  float cluster_distance;
+     *  bool smart_cluster;
+     *  int min_points;
+     *  float min_distance
+     *  float max_radius;
+     *  float max_mse;
      */
 
     /* CLASS CONSTRUCTOR */
     CircleDetector::CircleDetector(const rclcpp::NodeOptions &options)
-    : Node("CircleDetector", options), scan_received_(false), wait_timeout(5) {
+    : Node("CircleDetector", options), scan_received_(false) {
 
         RCLCPP_INFO(this->get_logger(), "CircleDetector node started.");
+
+        declare_get_parameters();
         
         // SERVER for /detect_cricles
         service_ = this->create_service<srv::DetectCircles>(
@@ -34,7 +45,7 @@ namespace detection{
         
         // SUBSCRIBER to scan topic
         scan_sub_ = this->create_subscription<LaserScan>(
-            "/scan", 10, 
+            scan_topic, 10, 
             std::bind(&CircleDetector::scan_callback, this, _1)
         );
 
@@ -43,6 +54,40 @@ namespace detection{
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
         RCLCPP_INFO(this->get_logger(), "CircleDetector initialized and waiting for requests.");
+    }
+
+    /* PARAMETERS */
+    void CircleDetector::declare_get_parameters(){
+        // parameter declaration
+        this->declare_parameter<int>("wait_timeout", 5);
+        this->declare_parameter<std::string>("scan_topic", "/scan");
+        this->declare_parameter<float>("cluster_distance", 0.3);
+        this->declare_parameter<bool>("smart_cluster", false);
+        this->declare_parameter<int>("min_points", 3);
+        this->declare_parameter<float>("min_distance", 0.0f);
+        this->declare_parameter<float>("max_radius", 0.5);
+        this->declare_parameter<float>("max_mse", 0.04);
+
+        // obtain values
+        wait_timeout = this->get_parameter("wait_timeout").as_int();
+        scan_topic = this->get_parameter("scan_topic").as_string();
+        cluster_distance = static_cast<float>(this->get_parameter("cluster_distance").as_double());
+        smart_cluster = this->get_parameter("smart_cluster").as_bool();
+        min_distance = static_cast<float>(this->get_parameter("min_distance").as_double());
+        min_points = this->get_parameter("min_points").as_int();
+        max_radius = static_cast<float>(this->get_parameter("max_radius").as_double());
+        max_mse = static_cast<float>(this->get_parameter("max_mse").as_double());
+
+        // show on screen
+        RCLCPP_INFO(this->get_logger(), "Parameters loaded:");
+        RCLCPP_INFO(this->get_logger(), "  wait_timeout: %d", wait_timeout);
+        RCLCPP_INFO(this->get_logger(), "  scan_topic: %s", scan_topic.c_str());
+        RCLCPP_INFO(this->get_logger(), "  cluster_distance: %.3f", cluster_distance);
+        RCLCPP_INFO(this->get_logger(), "  smart_cluster? %s", smart_cluster ? "true" : "false");
+        RCLCPP_INFO(this->get_logger(), "  min_points: %d", min_points);
+        RCLCPP_INFO(this->get_logger(), "  min_distance: %.3f", min_distance);
+        RCLCPP_INFO(this->get_logger(), "  max_radius: %.3f", max_radius);
+        RCLCPP_INFO(this->get_logger(), "  max_mse: %.4f", max_mse);
     }
 
     /* CALLBACKS */
@@ -97,7 +142,9 @@ namespace detection{
         // create a vector to store return values
         std::vector<cv::Point2f> results;
         // compute clusters and stats
-        std::vector<utils::Cluster> clusters = utils::process_scan(*msg, false, 0.3f, 3, 0, 0.5f, 0.04f);
+        std::vector<utils::Cluster> clusters = utils::process_scan(*msg, smart_cluster, cluster_distance,   // clustering
+                                                                    min_points, min_distance,               // filtering
+                                                                    max_radius, max_mse);                   // circle fitting
 
         // obtain the transform to the target frame
         TransformStamped transform;

@@ -59,10 +59,28 @@ namespace detection{
 
         std::mutex scan_mutex_;                                                             // thread synchronization                      
         std::condition_variable scan_cv_;
-        int wait_timeout;                                       
 
         std::unique_ptr<tf2_ros::Buffer> tf_buffer_;                                        // transformations
         std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
+        // parameters gotten
+        int wait_timeout;
+        std::string scan_topic;
+        float cluster_distance;
+        bool smart_cluster;
+        int min_points;
+        float min_distance;
+        float max_radius;
+        float max_mse;
+
+
+        /* PARAMETER SETTING */
+
+        /** @brief function used to declare and set parameters
+         *         to keep the node more general and work with different configs
+         */
+        void declare_get_parameters();
+
         
         /* CALLBACKS */
 
