@@ -239,7 +239,7 @@ public:
         //Extra point: cancel navigation once entering in the corridor
         if (isInCorridor)
         {
-          RCLCPP_WARN(this->get_logger(),"IsInCorridor == true, annullo la navigazione corrente");
+          RCLCPP_WARN(this->get_logger(),"IsInCorridor == true, delete the current navigation.");
           navigate_action_client_->async_cancel_goal(goal_handle);
         }
       };
