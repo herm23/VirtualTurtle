@@ -27,11 +27,18 @@ using DetectApriltagSrv = group28_assignament_1::srv::DetectTags;
 using DetectCirclesSrv = group28_assignament_1::srv::DetectCircles;
 using TagDetectionMsg  = group28_assignament_1::msg::TagDetection;
 
+enum class NavState {
+    Start_Nav,
+    Manuak_Nav,
+    Resume_Nav
+};
+
 class NavigationNode : public rclcpp::Node
 {
 public:
   NavigationNode() : Node("navigation_node")
   {
+    robot_state = NavState::Start_Nav;
     last_rotation_end_ = this->now();
       
     // Service client for activate the localization
@@ -56,7 +63,9 @@ public:
     lidar_sensor_subscriber = this->create_subscription<sensor_msgs::msg::LaserScan>("/scan", 10, 
         [this](const sensor_msgs::msg::LaserScan::SharedPtr msg)
       {
-        this->process_lidar_data_callback(msg); 
+        //Must not process lidar points when we resume navigation
+        if(robot_state != NavState::Resume_Nav)
+          this->process_lidar_data_callback(msg); 
       });
       
     publisher_ = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
@@ -237,10 +246,11 @@ public:
       {
         RCLCPP_INFO(this->get_logger(), "NavigateToPose feedback: distance_remaining=%.2f", feedback->distance_remaining);
         //Extra point: cancel navigation once entering in the corridor
-        if (isInCorridor)
+        if (isInCorridor && robot_state == NavState::Start_Nav)
         {
           RCLCPP_WARN(this->get_logger(),"IsInCorridor == true, delete the current navigation.");
           navigate_action_client_->async_cancel_goal(goal_handle);
+          robot_state = NavState::Manuak_Nav;
         }
       };
 
@@ -352,6 +362,10 @@ public:
     midpoint.y = (p1.y + p2.y) / 2.0;
     midpoint.z = (p1.z + p2.z) / 2.0;
 
+    //Midpoint adjustment
+    midpoint.x = midpoint.x - 0.1;
+    midpoint.y = midpoint.y + 0.2;
+
     RCLCPP_INFO(this->get_logger(),"Midpoint between first two tags: (%.3f, %.3f, %.3f)", midpoint.x, midpoint.y, midpoint.z);
     return midpoint;
   }
@@ -425,8 +439,15 @@ public:
     return last_amcl_pose_;
   }
 
+  void setResumeNav()
+  {
+    lidar_sensor_subscriber = nullptr; //avoid processing lidar points
+    robot_state = NavState::Resume_Nav;
+  }
+
 private:
   //Class Members
+  NavState robot_state;
   rclcpp::Client<nav2_msgs::srv::ManageLifecycleNodes>::SharedPtr localization_client;
   rclcpp::Client<nav2_msgs::srv::ManageLifecycleNodes>::SharedPtr navigation_client;
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initialpose_pub_;
@@ -635,7 +656,7 @@ int main(int argc, char * argv[])
             nav_node->getLastPose().header.frame_id.c_str()
   );
 
-          
+  nav_node->setResumeNav();
   nav_node->send_navigate_goal(goal_point);
   
   //STEP 5
