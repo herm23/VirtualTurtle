@@ -30,7 +30,7 @@ def generate_launch_description():
                     'min_points': 3,
                     'min_distance': 0.0,
                     'max_radius': 0.5,
-                    'max_mse': 0.04
+                    'max_mae': 0.04
                 }]
             )
         ],

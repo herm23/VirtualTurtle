@@ -71,7 +71,7 @@ namespace detection{
         int min_points;
         float min_distance;
         float max_radius;
-        float max_mse;
+        float max_mae;
 
 
         /* PARAMETER SETTING */
