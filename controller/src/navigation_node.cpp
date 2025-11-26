@@ -47,6 +47,8 @@ class NavigationNode : public rclcpp::Node
 public:
   NavigationNode() : Node("navigation_node")
   {
+    last_rotation_end_ = this->now();
+
     // SERVICE CLIENT PER ATTIVARE LOCALIZATION
     localization_client = this->create_client<nav2_msgs::srv::ManageLifecycleNodes>("/lifecycle_manager_localization/manage_nodes");
     
@@ -500,6 +502,9 @@ private:
   bool isInCorridor = false;
   bool isRotating = false;
 
+  rclcpp::Time last_rotation_end_{0, 0, RCL_ROS_TIME};
+  const double cooldown_sec = 0.5;
+
   //gestione richieste 
   rclcpp::Client<ServiceT>::SharedFuture send_client_request(bool isLocalization)
   {
@@ -540,11 +545,25 @@ private:
 
       // Range di angoli che ti interessa [rad]
       //Seleziono solo l'angolatura destra
-      const double target_angle_min = 3.92; //5/4 pigreco
-      const double target_angle_max = 5.49; //7/4 pigreco
+      // const double target_right_angle_min = 3.92; //5/4 pigreco
+      // const double target_right_angle_max = 5.49; //7/4 pigreco
 
-      double sum_distances = 0.0;
-      std::size_t count    = 0;
+      // const double  target_left_angle_min = 0.78; //1/4 pigreco
+      // const double target_left_angle_max = 2.36; //3/4 pigreco
+
+      //angolo lato destro ampio 30 gradi
+      const double target_right_angle_min = 4.45; //255 gradi (in rad)
+      const double target_right_angle_max = 4.97; //285 gradi (in rad)
+
+      //angolo lato sinistro ampio 30 gradi
+      const double  target_left_angle_min = 1.31; //75 gradi (in rad)
+      const double target_left_angle_max = 1.83;  //105 gradi (in rad)
+
+
+      double sum_right_distances = 0.0;
+      double sum_left_distances = 0.0;
+      std::size_t right_count    = 0;
+      std::size_t left_count    = 0;
 
       for (std::size_t i = 0; i < distances.size(); ++i)
       {
@@ -557,41 +576,81 @@ private:
           double angle = angle_min + static_cast<double>(i) * angle_increment; // [rad]
 
           // Considero solo i punti nel range angolare richiesto
-          if (angle >= target_angle_min && angle <= target_angle_max)
+          if (angle >= target_right_angle_min && angle <= target_right_angle_max)
           {
-              sum_distances += distance;
-              ++count;
+              sum_right_distances += distance;
+              ++right_count;
+          }
+
+          if (angle >= target_left_angle_min && angle <= target_left_angle_max)
+          {
+              sum_left_distances += distance;
+              ++left_count;
           }
       }
 
-      if (count == 0)
+      if (right_count == 0)
       {
           // RCLCPP_INFO(
           //     rclcpp::get_logger("lidar_processor"),
           //     "Nessun punto nel range angolare [%.2f, %.2f] rad.",
-          //     target_angle_min, target_angle_max
+          //     target_right_angle_min, target_right_angle_max
           // );
           return false;
       }
 
-      double avg_distance = sum_distances / static_cast<double>(count);
+      if (left_count == 0)
+      {
+          // RCLCPP_INFO(
+          //     rclcpp::get_logger("lidar_processor"),
+          //     "Nessun punto nel range angolare [%.2f, %.2f] rad.",
+          //     target_left_angle_min, target_left_angle_max
+          // );
+          return false;
+      }
+
+      double avg_right_distance = sum_right_distances / static_cast<double>(right_count);
+      double avg_left_distance = sum_left_distances / static_cast<double>(left_count);
 
       // RCLCPP_INFO(
       //     rclcpp::get_logger("lidar_processor"),
       //     "Distanza media nel range angolare [%.2f, %.2f] rad: %.3f m (su %zu punti)",
-      //     target_angle_min, target_angle_max, avg_distance, count
+      //     target_right_angle_min, target_right_angle_max, avg_right_distance, right_count
       // );
 
       // Threshold per il corridoio
-      const double threshold = 1.5;
-      isInCorridor = avg_distance < threshold;
-      RCLCPP_INFO(this->get_logger(),"(Avg dist: %f m)  IsInCorridor = %s", avg_distance, isInCorridor ? "true" : "false");
+      const double threshold = 2.8;
+      isInCorridor = (avg_left_distance + avg_right_distance) < threshold;
+      RCLCPP_INFO(this->get_logger(),"(Avg right: %f m) (Avg left: %f m) IsInCorridor = %s", avg_right_distance, avg_left_distance, isInCorridor ? "true" : "false");
+
+      
+      rclcpp::Time now = this->now();
+
+      // se sto ruotando, niente da fare
+      if (isRotating)
+        return true;
+
+      // se è passato troppo poco dall'ultima rotazione, non ruoto di nuovo
+      if ((now - last_rotation_end_).seconds() < cooldown_sec) {
+        // volendo puoi loggare qui
+        // RCLCPP_INFO(this->get_logger(),"Sono in cooldown, niente rotazione");
+        return true;
+      }
 
       const double tooclose_thresh = 0.4;
 
-      if(avg_distance < tooclose_thresh && !isRotating)
-        rotate_robot(0.1, 1.0);
-
+      if(avg_right_distance < tooclose_thresh && !isRotating)
+      {
+        RCLCPP_INFO(this->get_logger(),"DESTRA !!!");
+        rotate_robot(0.14, 1.0);
+      }
+        
+      if(avg_left_distance < tooclose_thresh && !isRotating)
+      {
+        RCLCPP_INFO(this->get_logger(),"SINISTRA !!!");
+        rotate_robot(-0.14, 1.0);
+      }
+        
       // if (isInCorridor)
       //     RCLCPP_INFO( rclcpp::get_logger("lidar_processor"), "Media %.3f < %.2f -> sei dentro al corridoio", avg_distance, threshold);
       // else
@@ -604,22 +663,27 @@ private:
   void rotate_robot(double angular_speed, double duration_sec)
   {
     isRotating = true;
+
     geometry_msgs::msg::Twist twist;
-    twist.linear.x = 0.0;
-    twist.angular.z = angular_speed;   // positivo = antiorario
+    twist.linear.x  = 0.0;
+    twist.angular.z = angular_speed;
 
     rclcpp::Rate rate(30);
     auto start = this->now();
 
     while (rclcpp::ok() && (this->now() - start).seconds() < duration_sec) {
-        publisher_->publish(twist);
-        rate.sleep();
+      publisher_->publish(twist);
+      rate.sleep();
     }
 
-    // Stop a fine rotazione
+    // Stop
     twist.angular.z = 0.0;
     publisher_->publish(twist);
+
+    isRotating = false;
+    last_rotation_end_ = this->now();   // <-- sempre ROS_TIME
   }
+
 
 };
 
@@ -650,7 +714,7 @@ int main(int argc, char * argv[])
   //STEP 4
   nav_node->send_navigate_goal(goal_point);
 
-  rclcpp::sleep_for(3s);
+  rclcpp::sleep_for(10s);
   RCLCPP_INFO(nav_node->get_logger(),"Init manual Nav");
 
   while (rclcpp::ok() && nav_node->getIsInCorridor())
