@@ -43,6 +43,15 @@ namespace utils {
         float radius=0.0f;
     };
 
+    /** @brief operator<< overloaded for cluster struct to show
+     *         it easily on standard output.
+     */
+    std::ostream& operator<<(std::ostream& os, const Cluster& cls) {
+        os << "Cluster{centroid=(" << cls.centroid.x <<", " << cls.centroid.y << ")}";
+        return os;
+    }
+
+
     /** @brief Function that converts data from laserscans
      *         into a set of 2D points in a cartesian frame
      * @param scan Input laser scan
@@ -84,7 +93,7 @@ namespace utils {
     std::vector<Cluster> smart_cluster_points(const std::vector<cv::Point2f>& points, float threshold=0.05f);
 
 
-    /** @brief Computes centroids using smart matrix operations
+    /** @brief Computes the centroid of each cluster
      * @param clusters Input/output vector of clusters (data modified in place)
      */
     void compute_centroids(std::vector<Cluster>& clusters);

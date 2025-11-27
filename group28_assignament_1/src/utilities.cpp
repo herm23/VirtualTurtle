@@ -108,7 +108,7 @@ namespace utils {
         return clusters;
     }
 
-    /** @brief Computes centroids using smart matrix operations
+    /** @brief Computes the centroid of each cluster
      * @param clusters Input/output vector of clusters (data modified in place)
      */
     void compute_centroids(std::vector<Cluster>& clusters){
@@ -119,11 +119,10 @@ namespace utils {
                 continue; 
             }
 
-            // Convert to cv::Mat and compute mean
-            cv::Mat cls_mat(cluster.points.size(), 2, CV_32F);
-            cluster2mat(cluster, cls_mat);
-            cv::Scalar mean = cv::mean(cls_mat);
-            cluster.centroid = cv::Point2f(static_cast<float>(mean[0]), static_cast<float>(mean[1]));
+            // modified to be quicker
+            cv::Point2f sum = cv::Point2f(0.0f,0.0f);
+            for (const auto& p : cluster.points) sum+=p;    // computes sum of points
+            cluster.centroid = cv::Point2f(sum.x/cluster.points.size(), sum.y/cluster.points.size());
         }
     }
 
@@ -160,7 +159,7 @@ namespace utils {
         // 2. more than 4 meters away (unreliable data)
         float aspect_ratio = std::max(bbox.width, bbox.height) / (std::min(bbox.width, bbox.height) + TOL);
         if(aspect_ratio> REJECT_THRESH || cv::norm(cls.centroid)>REJECT_THRESH) {
-            std::cout << "RATIO/DISTANCE FAILED" << cls.centroid.x << ", " << cls.centroid.y << std::endl; 
+            std::cout << "  " << cls << "discarded: RATIO/DISTANCE FAILED" << std::endl; 
             cls.type = 'l';
             return;
         }
@@ -176,7 +175,7 @@ namespace utils {
         // if at least one line was found, classify as line
         if(!lines.empty()){
             cls.type='l';
-            std::cout<< "HOUGH LINE" << std::endl;
+            std::cout << "  " << cls << " discarded: HOUGH LINE/s found" << std::endl;
         }
             
     }
@@ -205,7 +204,7 @@ namespace utils {
             // to be classified as circle they must satisfy:
             // 1. radius lower than max_radius (possible to fit a large circle to a line)
             if(radius > max_radius){
-                std::cout << "CANDIDATE" << center.x << " " << center.y  << "MAX RADIUS" << std::endl;
+                std::cout << "  CANDIDATE" << cls << "discarded: MAX RADIUS exceeded" << std::endl;
                 cls.type='l'; 
                 continue; 
             } 
@@ -219,7 +218,7 @@ namespace utils {
             mae /= cls.points.size();
             // bad fit --> line
             if (mae > max_residual) { 
-                std::cout << "CANDIDATE" << center.x << " " << center.y  << "MSE" << std::endl;
+                std::cout << "  CANDIDATE" << cls << "discarded: MAE exceeded" << std::endl;
                 cls.type = 'l'; 
                 continue; 
             }
@@ -230,7 +229,7 @@ namespace utils {
             // to be fit to circles
             // so we perform one last aspect ratio test
             if( cv::norm(center) > 4.0f){
-                std::cout << "CANDIDATE" << center.x << " " << center.y  << "FAR" << std::endl;
+                std::cout << "  CANDIDATE" << cls << "discarded: TOO FAR" << std::endl;
                 cls.type = 'l';
                 continue;
             }
