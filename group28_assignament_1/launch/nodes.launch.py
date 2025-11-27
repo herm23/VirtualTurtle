@@ -4,7 +4,8 @@
 ####################################################
 
 from launch import LaunchDescription
-from launch_ros.actions import ComposableNodeContainer
+from launch.actions import TimerAction
+from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
 
 def generate_launch_description():
@@ -53,7 +54,23 @@ def generate_launch_description():
         output='screen'
     )
 
+    # non-composable navigation node
+    navigation_node = Node(
+        package='controller',
+        executable='navigation_node',
+        name='navigation_node',
+        output='screen'
+    )
+
+    # delayed 3 seconds to ensure transforms
+    # are already being published
+    delayed_nodes = TimerAction(
+        period=3.0,
+        actions=[navigation_node]
+    )
+
     return LaunchDescription([
         circle_container,
-        tag_container
+        tag_container,
+        delayed_nodes
     ])

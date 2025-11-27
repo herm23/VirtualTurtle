@@ -3,14 +3,14 @@ from launch.actions import IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource, FrontendLaunchDescriptionSource
 from launch.substitutions import PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import ComposableNodeContainer
+from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
 
 
 def generate_launch_description():
     pkg_name = 'group28_assignament_1'
 
-    # Launch the simulation
+    # simulation launch
     assignment1_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
@@ -18,11 +18,10 @@ def generate_launch_description():
                 'launch',
                 'assignment_1.launch.py'
             ])
-        ]),
-        launch_arguments={ 'ros-args': '--log-level WARN' }.items()
+        ])
     )
 
-    # launch apriltag_ros with output disabled
+    # apriltag_ros launch with custom configuration
     apriltag_launch = IncludeLaunchDescription(
         FrontendLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -30,11 +29,10 @@ def generate_launch_description():
                 'launch',
                 'launch_apriltag.yaml'
             ])
-        ),
-        launch_arguments={ 'ros-args': '--log-level ERROR' }.items()
+        )
     )
 
-    # multithreaded container for CircleDetector
+    # CircleDetector (with tuned parameters)
     circle_container = ComposableNodeContainer(
         name='circle_detector_container',
         namespace='',
@@ -44,13 +42,23 @@ def generate_launch_description():
             ComposableNode(
                 package=pkg_name,
                 plugin='detection::CircleDetector',
-                name='circle_detector'
+                name='circle_detector',
+                parameters=[{
+                    'wait_timeout': 10,
+                    'scan_topic': '/scan',
+                    'cluster_distance': 0.3,
+                    'smart_cluster': False,
+                    'min_points': 3,
+                    'min_distance': 0.0,
+                    'max_radius': 0.5,
+                    'max_mae': 0.04
+                }]
             )
         ],
         output='screen'
     )
 
-    # Single-threaded container for TagDetector
+    # TagDetector
     tag_container = ComposableNodeContainer(
         name='tag_detector_container',
         namespace='',
@@ -66,13 +74,28 @@ def generate_launch_description():
         output='screen'
     )
 
+    # non-composable navigation node
+    navigation_node = Node(
+        package='controller',
+        executable='navigation_node',
+        name='navigation_node',
+        output='screen'
+    )
+
+    # Delay composable detection nodes like before
     delayed_nodes = TimerAction(
-        period=5.0,
+        period=7.0,
         actions=[circle_container, tag_container]
+    )
+
+    more_delayed_nodes = TimerAction(
+        period=10.0,
+        actions=[navigation_node]
     )
 
     return LaunchDescription([
         assignment1_launch,
         apriltag_launch,
-        delayed_nodes
+        delayed_nodes,
+        more_delayed_nodes
     ])
