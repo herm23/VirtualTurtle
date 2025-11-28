@@ -56,7 +56,7 @@ def generate_launch_description():
 
     # non-composable navigation node
     navigation_node = Node(
-        package='controller',
+        package=pkg_name,
         executable='navigation_node',
         name='navigation_node',
         output='screen'

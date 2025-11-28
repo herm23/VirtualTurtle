@@ -2,20 +2,35 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>group28_assignament_1</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="daniele.capuzzo@studenti.unipd.it">daniele, hernamm, angelica</maintainer>
+  <version>1.0.0</version>
+  <description>
+    ROS2 package responsible for: 
+    navigating a robot towards a goal using Nav2.
+    Detecting circles found at the destination.
+    Implements manual navigation of the narrow corridor, based on distance from the wall.
+  </description>
+
+  <maintainer email="daniele.capuzzo@studenti.unipd.it">daniele capuzzo</maintainer>
+  <maintainer email="hermann.serain@studenti.unipd.it">hermann serain</maintainer>
+  <maintainer email="angelica.zonta@studenti.unipd.it">angelica zonta</maintainer>
+  
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>apriltag_ros_tweaked</depend>
-
+  <depend>apriltag_ros</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>rclcpp_components</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>OpenCV</depend>
+  
   <build_depend>rosidl_default_generators</build_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
   <member_of_group>rosidl_interface_packages</member_of_group>

@@ -1,3 +1,7 @@
+#################################
+# this file launches everything #
+#################################
+
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource, FrontendLaunchDescriptionSource
@@ -76,7 +80,7 @@ def generate_launch_description():
 
     # non-composable navigation node
     navigation_node = Node(
-        package='controller',
+        package=pkg_name,
         executable='navigation_node',
         name='navigation_node',
         output='screen'

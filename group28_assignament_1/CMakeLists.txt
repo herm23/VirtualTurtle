@@ -11,6 +11,7 @@ find_package(ament_cmake REQUIRED)  # build
 
 find_package(rclcpp REQUIRED)       # component management
 find_package(rclcpp_components REQUIRED)
+find_package(rclcpp_action REQUIRED)
 
 find_package(tf2 REQUIRED)          # tf2
 find_package(tf2_ros REQUIRED)
@@ -19,6 +20,7 @@ find_package(tf2_msgs REQUIRED)     # messages
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
 
 find_package(OpenCV REQUIRED)       # image processing
 
@@ -93,6 +95,19 @@ rclcpp_components_register_node(circle_detector
   EXECUTABLE circle_detector_node
 )
 
+######### NAVIGATION NODE 
+# (merged from old controller package)
+# NOTE: non composable node
+add_executable(navigation_node src/navigation_node.cpp)
+ament_target_dependencies(navigation_node
+  rclcpp
+  rclcpp_action
+  geometry_msgs
+  nav2_msgs
+  sensor_msgs
+)
+# link against the generated interfaces
+target_link_libraries(navigation_node "${cpp_typesupport_target}")
 
 ####### OTHERS #######
 install(TARGETS
@@ -104,12 +119,10 @@ install(TARGETS
   RUNTIME DESTINATION bin
 )
 
-
-# install(TARGETS
-#   turtle
-#   burrow
-#   DESTINATION lib/${PROJECT_NAME}
-# )
+install(TARGETS
+  navigation_node
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 install(DIRECTORY include/ DESTINATION include)
 

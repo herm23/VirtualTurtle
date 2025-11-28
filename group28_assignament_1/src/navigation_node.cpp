@@ -1,3 +1,7 @@
+/*
+  Authors: Serain Hermann, Zonta Angelica
+*/
+
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -490,7 +494,7 @@ private:
 
     RCLCPP_INFO(this->get_logger(), "Sending  request to %s| command: %u", serviceName.c_str(), static_cast<unsigned>(request->command));
     auto result = client->async_send_request(request);
-    return result;
+    return result.future.share(); // THIS FIXES THE WARNING
   }
 
   bool process_lidar_data_callback(const sensor_msgs::msg::LaserScan::SharedPtr msg)
