@@ -248,7 +248,11 @@ public:
       [this](GoalHandleActionT::SharedPtr goal_handle,
             const std::shared_ptr<const ActionT::Feedback> feedback)
       {
-        RCLCPP_INFO(this->get_logger(), "NavigateToPose feedback: distance_remaining=%.2f", feedback->distance_remaining);
+        RCLCPP_INFO_THROTTLE(
+            this->get_logger(), *this->get_clock(),
+            250, "NavigateToPose feedback: distance_remaining=%.2f",
+            feedback->distance_remaining
+        );
         //Extra point: cancel navigation once entering in the corridor
         if (isInCorridor && robot_state == NavState::Start_Nav)
         {
@@ -367,8 +371,8 @@ public:
     midpoint.z = (p1.z + p2.z) / 2.0;
 
     //Midpoint adjustment
-    midpoint.x = midpoint.x - 0.1;
-    midpoint.y = midpoint.y + 0.2;
+    midpoint.x = midpoint.x - 0.2;
+    midpoint.y = midpoint.y + 0.3;
 
     RCLCPP_INFO(this->get_logger(),"Midpoint between first two tags: (%.3f, %.3f, %.3f)", midpoint.x, midpoint.y, midpoint.z);
     return midpoint;
