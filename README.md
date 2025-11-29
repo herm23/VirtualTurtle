@@ -2,6 +2,19 @@
 This repository contains the **ROS 2** solution developed for **Assignment 1** of the **Intelligent Robotics** course held at UniPD.  
 The system integrates AprilTag-based goal computation, autonomous navigation with Nav2, LiDAR-based table detection through circle extraction, and a manual corridor-navigation fallback. It includes modular nodes for tag detection, circle detection, and navigation orchestration, together with launch files for both full-system execution and isolated component testing.
 
+## Architecture overview
+The robot starts from a predefined location, determines a goal positioned between two AprilTags, navigates autonomously to that point using Nav2, and finally detects cylindrical tables using a LiDAR-based circle-extraction pipeline. A manual corridor-navigation module is included as a fallback strategy to enhance robustness in constrained environments.
+
+Key subsystems include:
+- TagDetector Node: Queries AprilTag transforms, computes poses in arbitrary frames, and returns reliable tag information through a dedicated service.
+- CircleDetector Node: Performs LiDAR clustering, refinement, and multi-stage circle fitting to locate cylindrical tables.
+- NavigationNode: Coordinates localization, goal computation, autonomous navigation, corridor handling, and table detection.
+
+![class_diagram_page-0001 (1)](https://github.com/user-attachments/assets/f2788e87-a4b4-4036-96c0-f89ce5d6d5d6)
+
+
+## Demo videos
+🎥 Project Videos https://drive.google.com/drive/folders/1x9G0x06GG4FukoS3zG4bcN6fa-_zNoG7?usp=sharing
 ## Launch Instructions
 1. **Clone repositories into your ROS2 workspace**
 ```bash
