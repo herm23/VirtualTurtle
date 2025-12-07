@@ -20,7 +20,7 @@ Key subsystems include:
 ```bash
 cd YOUR_ROS2_WS/src
 git clone https://github.com/PieroSimonet/ir_2526.git
-git clone https://github.com/danieleCapuzzo/intelligent-robotics-assignment1.git
+git clone https://github.com/herm23/VirtualTurtle.git
 ```
 
 2. **Build the project**
