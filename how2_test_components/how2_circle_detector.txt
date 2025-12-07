@@ -1,0 +1,62 @@
+RUN MULTITHREADED RCLCPP COMPONENT CONTAINER
+ros2 run rclcpp_components component_container_mt
+ros2 component load /ComponentManager group28_assignament_1 detection::CircleDetector
+
+CHOOSE ANY ORDER YOU WISH FOR THE FOLLOWING
+# one fake scan
+ros2 topic pub -t 1 /scan sensor_msgs/msg/LaserScan
+
+# keep publishing fake scans
+ros2 topic pub /scan sensor_msgs/msg/LaserScan
+
+# call the service to request detection
+ros2 service call /detect_circles group28_assignament_1/srv/DetectCircles "{target_frame: 'odom'}"
+
+# semi-correct poses
+x: 13.227198600769043, y: -1.5748183727264404, z: 0
+x: 10.813350677490234, y: -1.0588489770889282, z: 0
+x: 11.759237289428711, y: -3.7587802410125732, z: 0
+
+SHOW POSES ON RVIZ THROUGH COMMAND LINE (TAKEN FROM AN ORIGINAL RESPONSE OF algorithmV1)
+ros2 topic pub -1 /waypoints visualization_msgs/msg/MarkerArray "
+markers:
+  # Marker ID 0 (Original)
+  - header:
+      frame_id: \"odom\"
+      stamp: {sec: 0, nanosec: 0}
+    ns: \"circles\"
+    id: 0
+    type: 2 # SPHERE
+    action: 0 # ADD
+    pose:
+      position: {x: 11.75006103515625, y: -3.7794861793518066, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    scale: {x: 0.3, y: 0.3, z: 0.3}
+    color: {r: 1.0, g: 0.0, b: 0.0, a: 1.0}
+
+  - header:
+      frame_id: \"odom\"
+      stamp: {sec: 0, nanosec: 0}
+    ns: \"circles\"
+    id: 1
+    type: 2 # SPHERE
+    action: 0 # ADD
+    pose:
+      position: {x: 13.227198600769043, y: -1.5748183727264404, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    scale: {x: 0.3, y: 0.3, z: 0.3}
+    color: {r: 1.0, g: 0.0, b: 0.0, a: 1.0}
+
+  - header:
+      frame_id: \"odom\"
+      stamp: {sec: 0, nanosec: 0}
+    ns: \"circles\"
+    id: 2
+    type: 2 # SPHERE
+    action: 0 # ADD
+    pose:
+      position: {x: 10.813350677490234, y: -1.0588489770889282, z: 0.0}
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    scale: {x: 0.3, y: 0.3, z: 0.3}
+    color: {r: 1.0, g: 0.0, b: 0.0, a: 1.0}
+"
